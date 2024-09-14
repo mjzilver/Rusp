@@ -1,10 +1,33 @@
+use std::fmt;
+
 use crate::lexer::Token;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Object {
     Integer(i64),
     Symbol(String),
-    List(Vec<Object>)
+    List(Vec<Object>),
+}
+
+impl fmt::Display for Object {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Object::Integer(i) => write!(f, "{}", i),
+            Object::Symbol(s) => write!(f, "{}", s),
+            Object::List(lst) => {
+                write!(f, "(")?;
+                let mut first = true;
+                for obj in lst {
+                    if !first {
+                        write!(f, " ")?;
+                    }
+                    first = false;
+                    write!(f, "{}", obj)?;
+                }
+                write!(f, ")")
+            }
+        }
+    }
 }
 
 pub fn parse(tokens: &[Token]) -> Result<Object, String> {
@@ -25,12 +48,8 @@ fn parse_list(tokens: &mut Vec<Token>) -> Result<Object, String> {
             Token::RParen => {
                 return Ok(Object::List(list));
             }
-            Token::Integer(n) => {
-                list.push(Object::Integer(n))
-            }
-            Token::Symbol(s) =>{
-                list.push(Object::Symbol(s))
-            }
+            Token::Integer(n) => list.push(Object::Integer(n)),
+            Token::Symbol(s) => list.push(Object::Symbol(s)),
         }
     }
 
@@ -47,8 +66,6 @@ mod tests {
 
     #[test]
     fn test_add() {
-        // Test string (+ 2 3)
-
         let mut tokens = Vec::new();
         tokens.push(Token::LParen);
         tokens.push(Token::Symbol("+".to_owned()));

@@ -9,7 +9,7 @@ pub enum Token {
 pub fn tokenize(input: &str) -> Vec<Token> {
     let mut tokens: Vec<Token> = Vec::new();
     let mut chars = input.chars().peekable();
-    
+
     while let Some(&ch) = chars.peek() {
         match ch {
             '(' => {
@@ -37,7 +37,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                 chars.next();
             }
             _ if ch.is_whitespace() => {
-                chars.next(); 
+                chars.next();
             }
             _ => {
                 eprintln!("Error: unrecognized token character '{}'", ch);
