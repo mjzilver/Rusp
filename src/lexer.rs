@@ -1,6 +1,7 @@
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     Integer(i64),
+    String(String),
     Symbol(String),
     LParen,
     RParen,
@@ -32,7 +33,37 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                 }
                 tokens.push(Token::Integer(number.parse::<i64>().unwrap()));
             }
-            '+' | '-' | '*' | '/' => {
+            _ if ch.is_alphabetic() || ch == '_' => {
+                let mut ident = String::new();
+                while let Some(&ch) = chars.peek() {
+                    if ch.is_alphabetic() || ch == '_' {
+                        ident.push(ch);
+                        chars.next();
+                    } else {
+                        break;
+                    }
+                }
+                tokens.push(Token::Symbol(ident))
+            }
+            '"' => {
+                chars.next(); 
+                let mut string = String::new();
+                while let Some(&ch) = chars.peek() {
+                    if ch == '"' {
+                        chars.next(); 
+                        tokens.push(Token::String(string));
+                        break;
+                    } else {
+                        string.push(ch);
+                        chars.next();
+                    }
+                }
+
+                if chars.peek().is_none() {
+                    eprintln!("Error: Unclosed string literal");
+                }
+            }
+            '+' | '-' | '*' | '/' | '<' | '>' | '=' => {
                 tokens.push(Token::Symbol(ch.to_string()));
                 chars.next();
             }

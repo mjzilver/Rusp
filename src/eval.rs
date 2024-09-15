@@ -1,11 +1,14 @@
-use crate::builtins::get_builtin_function;
+use crate::builtins::{self, get_builtin_function};
 use crate::{env::Env, parser::Object};
 
 pub fn eval(object: Object, env: &mut Env) -> Result<Object, String> {
     match object {
         Object::Integer(_) => Ok(object),
+        Object::String(_) => Ok(object),
+        Object::Bool(_) => Ok(object),
         Object::Symbol(ref s) => eval_symbol(s, env),
         Object::List(ref list) => eval_list(list, env),
+        Object::Void() => Ok(Object::Void()),
     }
 }
 
@@ -25,8 +28,14 @@ fn eval_list(list: &Vec<Object>, env: &mut Env) -> Result<Object, String> {
     }
 
     let func = eval(list[0].clone(), env)?;
-
     let args = &list[1..];
+
+    if let Object::Symbol(ref s) = func {
+        if s == "let" {
+            return builtins::let_function(args.to_vec(), env)
+        }
+    }
+
     let args = args
         .iter()
         .map(|arg| eval(arg.clone(), env))
@@ -56,7 +65,7 @@ mod tests {
 
     #[test]
     fn test_eval_addition() {
-        // Arrange 
+        // Arrange
         let mut env = Env::new();
         let input = Object::List(vec![
             Object::Symbol("+".to_string()),

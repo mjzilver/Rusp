@@ -1,4 +1,4 @@
-use crate::lexer::tokenize;
+use crate::{lexer::tokenize, parser::Object};
 use crate::env::Env;
 use crate::eval::eval;
 use crate::parser::parse;
@@ -8,6 +8,9 @@ pub fn start() {
     let mut s = String::new();
     let mut env = Env::new();
     
+    env.set("T".to_string(), Object::Bool(true));
+    env.set("NIL".to_string(), Object::Bool(false));
+
     loop {
         print!("> ");
         std::io::stdout().flush().expect("Failed to flush stdout");

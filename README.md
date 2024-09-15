@@ -2,23 +2,28 @@
 
 This project is a simple LISP interpreter written in Rust, inspired by "Writing an Interpreter in Go."
 
-It is purely for my own educational purposes. 
-
-## Supported Tokens
-
-- [x] `Integer`
-- [x] `Symbol`
-- [x] `LParen`
-- [x] `RParen` 
-- [ ] `String`
-- [ ] `Keyword` 
+It is purely for my own educational purposes.
 
 ## Built-ins
 - [x] `+`
 - [x] `-`
-- [ ] `*`
-- [ ] `/`
-- [x] `define`
+- [x] `*`
+- [x] `/`
+- [x] `>`
+- [x] `<`
+- [x] `=`
+- [x] `not`
+- [ ] `mod`
+- [x] `let`
+- [x] `print`
+- [ ] `len`
+
+## Features
+- [ ] `if`
+- [ ] `loop`
+- [ ] `functions`
+- [ ] `lists`
+- [ ] `macro`
 
 ## Notes on LISP
 Inspiration: https://www.youtube.com/watch?v=V02SQDh47gA

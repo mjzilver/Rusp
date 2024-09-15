@@ -5,8 +5,11 @@ use crate::lexer::Token;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Object {
     Integer(i64),
+    String(String),
     Symbol(String),
+    Bool(bool),
     List(Vec<Object>),
+    Void()
 }
 
 impl fmt::Display for Object {
@@ -14,6 +17,8 @@ impl fmt::Display for Object {
         match self {
             Object::Integer(i) => write!(f, "{}", i),
             Object::Symbol(s) => write!(f, "{}", s),
+            Object::String(s) => write!(f, "\"{}\"", s),
+            Object::Bool(b) => write!(f, "{}", b),
             Object::List(lst) => {
                 write!(f, "(")?;
                 let mut first = true;
@@ -26,6 +31,7 @@ impl fmt::Display for Object {
                 }
                 write!(f, ")")
             }
+            Object::Void() => Ok(()),
         }
     }
 }
@@ -50,11 +56,14 @@ fn parse_list(tokens: &mut Vec<Token>) -> Result<Object, String> {
             }
             Token::Integer(n) => list.push(Object::Integer(n)),
             Token::Symbol(s) => list.push(Object::Symbol(s)),
+            Token::String(s) => list.push(Object::String(s))
         }
     }
 
     if list.len() == 1 {
         Ok(list.pop().unwrap())
+    } else if list.len() > 1 {
+        Ok(Object::List(list))
     } else {
         Err("Parsing error".to_owned())
     }
