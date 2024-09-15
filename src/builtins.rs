@@ -334,8 +334,24 @@ pub fn dotimes_function(args: Vec<Object>, env: &mut Env) -> Result<Object, Stri
     Ok(Object::Void())
 }
 
-fn cond_function(_args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
-    Ok(Object::Void())
+pub fn cond_function(args: Vec<Object>, env: &mut Env) -> Result<Object, String> {
+    for clause in &args {
+        match clause {
+            Object::List(pair) if pair.len() == 2 => {
+                let condition = eval(pair[0].clone(), env)?;
+
+                if condition == Object::Bool(true) {
+                    return eval(pair[1].clone(), env);
+                }
+            }
+            Object::List(pair) if pair.len() == 1 => {
+                return eval(pair[0].clone(), env);
+            }
+            _ => return Err("Invalid cond clause".to_string()),
+        }
+    }
+
+    Ok(Object::Bool(false))
 }
 
 pub fn defun_function(args: Vec<Object>, env: &mut Env) -> Result<Object, String> {

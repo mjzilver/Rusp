@@ -56,6 +56,7 @@ fn eval_list(list: &Vec<Object>, env: &mut Env) -> Result<Object, String> {
             "let" => return builtins::let_function(args.to_vec(), env),
             "defun" => return builtins::defun_function(args.to_vec(), env),
             "dotimes" => return builtins::dotimes_function(args.to_vec(), env),
+            "cond" => return builtins::cond_function(args.to_vec(), env),
             _ => {}
         }
     }
