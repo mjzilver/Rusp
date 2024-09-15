@@ -7,6 +7,22 @@ It is purely for my own educational purposes.
 ## Lisp Spec
 http://clhs.lisp.se/Front/index.htm
 
+https://rextester.com/l/common_lisp_online_compiler 
+
+## My goal
+```lisp
+(defun fizzbuzz (n)
+  (dotimes (i n)
+    (let ((num (+ i 1)))
+      (cond
+        ((and (zerop (mod num 3)) (zerop (mod num 5))) (format t "FizzBuzz~%"))
+        ((zerop (mod num 3)) (format t "Fizz~%"))
+        ((zerop (mod num 5)) (format t "Buzz~%"))
+        (T (format t "~a~%" num))))))
+
+(fizzbuzz 30)
+```
+
 ## Built-ins
 - [x] `+`
 - [x] `-`
@@ -20,29 +36,11 @@ http://clhs.lisp.se/Front/index.htm
 - [x] `let`
 - [x] `print`
 - [ ] `len`
-
-## Features
 - [ ] `if`
 - [ ] `loop`
+- [ ] `cond`
+- [ ] `zerop` - Tests if a number is zero.
 - [ ] `functions`
 - [ ] `lists`
-- [ ] `macro`
-
-## Notes on LISP
-Inspiration: https://www.youtube.com/watch?v=V02SQDh47gA
-
-```
-(function arguments...)
-
-(+ 1 2)
- ^ ^ ^
- | | Argument 2 
- | Argument 1
- Function
-
-+ is essentially a function that takes 2 arguments
-could be represented as
-+(a, b) = {
-    return a + b
-}
-```
+- [ ] `dotimes`
+- [ ] `format`

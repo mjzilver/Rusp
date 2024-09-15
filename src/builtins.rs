@@ -4,15 +4,25 @@ pub type BuiltInFunction = fn(Vec<Object>, env: &mut Env) -> Result<Object, Stri
 
 pub fn get_builtin_function(name: &str) -> Option<BuiltInFunction> {
     match name {
+        // Arithmetic
         "+" => Some(add_function),
         "-" => Some(minus_function),
         "*" => Some(multiply_function),
         "/" => Some(divide_function),
-        "=" => Some(equals_function),
+
+        // Comparison
         "not" => Some(not_function),
-        ">" => Some(greater_function),
-        "<" => Some(lesser_function),
+        "=" => Some(|args, _| compare_objects(args, equals)),
+        "/=" => Some(not_equals_all),
+        ">" => Some(|args, _| compare_objects(args, greater_than)),
+        "<" => Some(|args, _| compare_objects(args, lesser_than)),
+        ">=" => Some(|args, _| compare_objects(args, greater_than_or_equals)),
+        "<=" => Some(|args, _| compare_objects(args, lesser_than_or_equals)),
+
+        // Variables
         "let" => Some(let_function),
+
+        // Print
         "print" => Some(print_function),
         _ => None,
     }
@@ -110,12 +120,6 @@ fn print_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
     Ok(Object::Void())
 }
 
-fn equals_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
-    Ok(Object::Bool(
-        args.iter().all(|item| item == args.get(0).unwrap()),
-    ))
-}
-
 fn not_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
     if args.len() != 1 {
         return Err("Incorrect number of arguments for let".to_string());
@@ -128,7 +132,9 @@ fn not_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
     }
 }
 
-fn greater_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
+type CompareFn = fn(&Object, &Object) -> bool;
+
+fn compare_objects(args: Vec<Object>, comparison: CompareFn) -> Result<Object, String> {
     if args.len() < 2 {
         return Err("Require at least 2 items to compare".to_string());
     }
@@ -139,12 +145,12 @@ fn greater_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String>
 
         match (item1, item2) {
             (Object::Bool(bool1), Object::Bool(bool2)) => {
-                if bool1 <= bool2 {
+                if !comparison(&Object::Bool(*bool1), &Object::Bool(*bool2)) {
                     return Ok(Object::Bool(false));
                 }
             }
             (Object::Integer(int1), Object::Integer(int2)) => {
-                if int1 <= int2 {
+                if !comparison(&Object::Integer(*int1), &Object::Integer(*int2)) {
                     return Ok(Object::Bool(false));
                 }
             }
@@ -157,28 +163,56 @@ fn greater_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String>
     Ok(Object::Bool(true))
 }
 
-fn lesser_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
+fn greater_than(item1: &Object, item2: &Object) -> bool {
+    match (item1, item2) {
+        (Object::Bool(bool1), Object::Bool(bool2)) => bool1 > bool2,
+        (Object::Integer(int1), Object::Integer(int2)) => int1 > int2,
+        _ => false,
+    }
+}
+
+fn lesser_than(item1: &Object, item2: &Object) -> bool {
+    match (item1, item2) {
+        (Object::Bool(bool1), Object::Bool(bool2)) => bool1 < bool2,
+        (Object::Integer(int1), Object::Integer(int2)) => int1 < int2,
+        _ => false,
+    }
+}
+
+fn greater_than_or_equals(item1: &Object, item2: &Object) -> bool {
+    match (item1, item2) {
+        (Object::Bool(bool1), Object::Bool(bool2)) => bool1 >= bool2,
+        (Object::Integer(int1), Object::Integer(int2)) => int1 >= int2,
+        _ => false,
+    }
+}
+
+fn lesser_than_or_equals(item1: &Object, item2: &Object) -> bool {
+    match (item1, item2) {
+        (Object::Bool(bool1), Object::Bool(bool2)) => bool1 <= bool2,
+        (Object::Integer(int1), Object::Integer(int2)) => int1 <= int2,
+        _ => false,
+    }
+}
+
+fn equals(item1: &Object, item2: &Object) -> bool {
+    match (item1, item2) {
+        (Object::Bool(bool1), Object::Bool(bool2)) => bool1 == bool2,
+        (Object::Integer(int1), Object::Integer(int2)) => int1 == int2,
+        (Object::String(str1), Object::String(str2)) => str1 == str2,
+        _ => false,
+    }
+}
+
+fn not_equals_all(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
     if args.len() < 2 {
         return Err("Require at least 2 items to compare".to_string());
     }
 
-    for i in 0..(args.len() - 1) {
-        let item1 = &args[i];
-        let item2 = &args[i + 1];
-
-        match (item1, item2) {
-            (Object::Bool(bool1), Object::Bool(bool2)) => {
-                if bool1 >= bool2 {
-                    return Ok(Object::Bool(false));
-                }
-            }
-            (Object::Integer(int1), Object::Integer(int2)) => {
-                if int1 >= int2 {
-                    return Ok(Object::Bool(false));
-                }
-            }
-            _ => {
-                return Err("Unsupported comparison between different types".to_string());
+    for i in 0..args.len() {
+        for j in (i + 1)..args.len() {
+            if equals(&args[i], &args[j]) {
+                return Ok(Object::Bool(false));
             }
         }
     }

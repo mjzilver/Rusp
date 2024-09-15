@@ -63,9 +63,18 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                     eprintln!("Error: Unclosed string literal");
                 }
             }
-            '+' | '-' | '*' | '/' | '<' | '>' | '=' => {
-                tokens.push(Token::Symbol(ch.to_string()));
+            _ if is_operator(ch) => {
+                let mut op_string = ch.to_string();
                 chars.next();
+
+                if let Some(&next_ch) = chars.peek() {
+                    if is_two_char_operator(ch, next_ch) {
+                        op_string.push(next_ch);
+                        chars.next();
+                    }
+                }
+
+                tokens.push(Token::Symbol(op_string));
             }
             _ if ch.is_whitespace() => {
                 chars.next();
@@ -78,6 +87,14 @@ pub fn tokenize(input: &str) -> Vec<Token> {
     }
 
     tokens
+}
+
+fn is_operator(c: char) -> bool {
+    matches!(c, '+' | '-' | '*' | '/' | '<' | '>' | '=')
+}
+
+fn is_two_char_operator(first: char, second: char) -> bool {
+    matches!((first, second), ('<', '=') | ('>', '=') | ('/', '='))
 }
 
 #[cfg(test)]

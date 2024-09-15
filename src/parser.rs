@@ -18,7 +18,7 @@ impl fmt::Display for Object {
             Object::Integer(i) => write!(f, "{}", i),
             Object::Symbol(s) => write!(f, "{}", s),
             Object::String(s) => write!(f, "\"{}\"", s),
-            Object::Bool(b) => write!(f, "{}", b),
+            Object::Bool(b) => write!(f, "{}", if *b { "T" } else { "NIL" }),
             Object::List(lst) => {
                 write!(f, "(")?;
                 let mut first = true;

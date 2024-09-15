@@ -75,4 +75,79 @@ mod tests {
             assert_eq!(result, expected_output, "Failed for input: {}", input);
         }
     }
+
+    #[test]
+    fn test_handle_comparisons() {
+        // Arrange
+        let mut env = Env::new();
+        let test_cases = vec![
+            // Equality
+            ("(= 1 1)", "T"),
+            ("(= 1 2)", "NIL"),
+            // Inequality
+            // to do
+            // Greater than
+            ("(> 3 2)", "T"),
+            ("(> 2 3)", "NIL"),
+            ("(> 3 3)", "NIL"),
+            // Less than
+            ("(< 2 3)", "T"),
+            ("(< 3 2)", "NIL"),
+            ("(< 3 3)", "NIL"),
+        ];
+
+        for (input, expected_output) in test_cases {
+            // Act
+            let result = handle_input(input, &mut env);
+
+            // Assert
+            assert_eq!(result, expected_output, "Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn test_handle_two_char_comparisons() {
+        // Arrange
+        let mut env = Env::new();
+        let test_cases = vec![
+            // Inequality
+            ("(/= 1 1)", "NIL"),
+            ("(/= 1 2)", "T"),
+            // Greater than or equal
+            ("(>= 3 2)", "T"),
+            ("(>= 2 3)", "NIL"),
+            ("(>= 3 3)", "T"),
+            // Less than or equal comparisons
+            ("(<= 2 3)", "T"),
+            ("(<= 3 2)", "NIL"),
+            ("(<= 3 3)", "T"),
+        ];
+
+        for (input, expected_output) in test_cases {
+            // Act
+            let result = handle_input(input, &mut env);
+
+            // Assert
+            assert_eq!(result, expected_output, "Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn test_handle_if() {
+        // Arrange
+        let mut env = Env::new();
+        let test_cases = vec![
+            ("(if (> 5 3) 1 0)", "1"),
+            ("(if (< 2 1) 10 20)", "20"),
+        ];
+
+        for (input, expected_output) in test_cases {
+            // Act
+            let result = handle_input(input, &mut env);
+
+            // Assert
+            assert_eq!(result, expected_output, "Failed for input: {}", input);
+        }
+    }
+
 }
