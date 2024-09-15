@@ -50,33 +50,34 @@ fn eval_list(list: &Vec<Object>, env: &mut Env) -> Result<Object, String> {
     let func = eval(list[0].clone(), env)?;
     let args = &list[1..];
 
+    // Check for special forms
     if let Object::Symbol(ref s) = func {
-        if s == "let" {
-            return builtins::let_function(args.to_vec(), env);
-        } else if s == "defun" {
-            return builtins::defun_function(args.to_vec(), env);
+        match s.as_str() {
+            "let" => return builtins::let_function(args.to_vec(), env),
+            "defun" => return builtins::defun_function(args.to_vec(), env),
+            "dotimes" => return builtins::dotimes_function(args.to_vec(), env),
+            _ => {}
         }
     }
 
-    let args = args
-        .iter()
-        .map(|arg| eval(arg.clone(), env))
-        .collect::<Result<Vec<_>, _>>()?;
-
-    apply_function(func, args, env)
+    apply_function(func, args.to_vec(), env)
 }
 
 fn apply_function(func: Object, args: Vec<Object>, env: &mut Env) -> Result<Object, String> {
+    let evaluated_args: Result<Vec<Object>, String> =
+        args.into_iter().map(|arg| eval(arg, env)).collect();
+    let evaluated_args = evaluated_args?;
+
     match func {
         Object::Symbol(ref s) => {
             if let Some(built_in) = get_builtin_function(s.as_str()) {
-                built_in(args, env)
+                built_in(evaluated_args, env)
             } else {
                 Err(format!("Unknown function: {}", s))
             }
         }
         Object::Function { name, params, body } => {
-            if params.len() != args.len() {
+            if params.len() != evaluated_args.len() {
                 return Err(format!(
                     "Incorrect number of arguments for function: {}",
                     name
@@ -84,7 +85,7 @@ fn apply_function(func: Object, args: Vec<Object>, env: &mut Env) -> Result<Obje
             }
 
             let mut local_env = env.clone();
-            for (param, arg) in params.into_iter().zip(args) {
+            for (param, arg) in params.into_iter().zip(evaluated_args) {
                 local_env.set(param.to_string(), arg);
             }
 

@@ -9,6 +9,7 @@ pub fn get_builtin_function(name: &str) -> Option<BuiltInFunction> {
         "-" => Some(minus_function),
         "*" => Some(multiply_function),
         "/" => Some(divide_function),
+        "mod" => Some(mod_function),
 
         // Comparison
         "not" => Some(not_function),
@@ -18,6 +19,8 @@ pub fn get_builtin_function(name: &str) -> Option<BuiltInFunction> {
         "<" => Some(|args, _| compare_objects(args, lesser_than)),
         ">=" => Some(|args, _| compare_objects(args, greater_than_or_equals)),
         "<=" => Some(|args, _| compare_objects(args, lesser_than_or_equals)),
+        "zerop" => Some(zerop_function),
+        "and" => Some(and_function),
 
         // Variables
         "let" => Some(let_function),
@@ -25,6 +28,8 @@ pub fn get_builtin_function(name: &str) -> Option<BuiltInFunction> {
 
         // control flow
         "if" => Some(if_function),
+        "dotimes" => Some(dotimes_function),
+        "cond" => Some(cond_function),
 
         // IO
         "print" => Some(print_function),
@@ -109,6 +114,28 @@ fn divide_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> 
     } else {
         Err("First argument must be an integer".to_string())
     }
+}
+
+fn mod_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
+    if args.len() != 2 {
+        return Err("Incorrect number of arguments for mod".to_string());
+    }
+
+    let a = match &args[0] {
+        Object::Integer(n) => *n,
+        _ => return Err("First argument to mod must be an integer".to_string()),
+    };
+
+    let b = match &args[1] {
+        Object::Integer(n) => *n,
+        _ => return Err("Second argument to mod must be an integer".to_string()),
+    };
+
+    if b == 0 {
+        return Err("Division by zero in mod".to_string());
+    }
+
+    Ok(Object::Integer(a % b))
 }
 
 fn print_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
@@ -228,6 +255,28 @@ fn not_equals_all(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
     Ok(Object::Bool(true))
 }
 
+fn zerop_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
+    if args.len() != 1 {
+        return Err("Incorrect number of arguments for zerop".to_string());
+    }
+
+    match &args[0] {
+        Object::Integer(n) => Ok(Object::Bool(*n == 0)),
+        _ => Err("Argument to zerop must be an integer".to_string()),
+    }
+}
+
+fn and_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
+    for arg in args {
+        let result = eval(arg, &mut Env::new())?;
+        if let Object::Bool(false) = result {
+            return Ok(Object::Bool(false));
+        }
+    }
+
+    Ok(Object::Bool(true))
+}
+
 fn if_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
     if args.len() < 2 || args.len() > 3 {
         return Err("Incorrect number of arguments for if".to_string());
@@ -244,6 +293,49 @@ fn if_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
     }
 
     Ok(Object::Bool(false))
+}
+
+pub fn dotimes_function(args: Vec<Object>, env: &mut Env) -> Result<Object, String> {
+    if args.len() != 2 {
+        return Err("dotimes expects 2 arguments".to_string());
+    }
+
+    let loop_args = match &args[0] {
+        Object::List(list) => list,
+        _ => return Err("dotimes first argument should be a list".to_string()),
+    };
+
+    if loop_args.len() != 2 {
+        return Err("dotimes loop variable and limit expected".to_string());
+    }
+
+    let loop_var = match &loop_args[0] {
+        Object::Symbol(s) => s,
+        _ => return Err("First item in dotimes must be a symbol".to_string()),
+    };
+
+    let limit = match &eval(loop_args[1].clone(), env)? {
+        Object::Integer(i) => *i,
+        _ => return Err("Limit in dotimes must evaluate to an integer".to_string()),
+    };
+
+    let body = &args[1];
+
+    for i in 0..limit {
+        let mut local_env = env.clone();
+        local_env.set(loop_var.clone(), Object::Integer(i));
+
+        let result = eval(body.clone(), &mut local_env);
+        if result.is_err() {
+            return result;
+        }
+    }
+
+    Ok(Object::Void())
+}
+
+fn cond_function(_args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
+    Ok(Object::Void())
 }
 
 pub fn defun_function(args: Vec<Object>, env: &mut Env) -> Result<Object, String> {

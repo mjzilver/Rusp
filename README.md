@@ -15,10 +15,10 @@ https://rextester.com/l/common_lisp_online_compiler
   (dotimes (i n)
     (let ((num (+ i 1)))
       (cond
-        ((and (zerop (mod num 3)) (zerop (mod num 5))) (format t "FizzBuzz~%"))
-        ((zerop (mod num 3)) (format t "Fizz~%"))
-        ((zerop (mod num 5)) (format t "Buzz~%"))
-        (T (format t "~a~%" num))))))
+        ((and (zerop (mod num 3)) (zerop (mod num 5))) (print "FizzBuzz"))
+        ((zerop (mod num 3)) (print "Fizz"))
+        ((zerop (mod num 5)) (print "Buzz"))
+        (T (print num))))))
 
 (fizzbuzz 30)
 ```
@@ -34,7 +34,6 @@ https://rextester.com/l/common_lisp_online_compiler
 - [x] `/=`
 - [x] `not`
 - [ ] `mod`
-- [ ] `rem`
 
 ## Built-ins
 - [x] `let`
@@ -53,14 +52,9 @@ https://rextester.com/l/common_lisp_online_compiler
     (condition2 expression2) 
     (t default-expression))
 ```
-- [ ] `zerop` - `(zerop number)`
-- [ ] `defun`
+- [x] `zerop` - `(zerop number)`
+- [x] `defun`
 ```lisp
 (defun function-name (parameters) body)
 ```
-- [ ] `lists`
 - [ ] `dotimes`
-- [ ] `format`
-```lisp
-(format destination control-string &rest args)`
-```
