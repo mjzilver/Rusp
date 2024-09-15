@@ -46,11 +46,11 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                 tokens.push(Token::Symbol(ident))
             }
             '"' => {
-                chars.next(); 
+                chars.next();
                 let mut string = String::new();
                 while let Some(&ch) = chars.peek() {
                     if ch == '"' {
-                        chars.next(); 
+                        chars.next();
                         tokens.push(Token::String(string));
                         break;
                     } else {

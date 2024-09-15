@@ -8,15 +8,18 @@ pub struct Env {
 
 impl Env {
     pub fn new() -> Self {
-        Env {
+        let mut env = Env {
             store: HashMap::new(),
-        }
+        };
+        env.set("T".to_string(), Object::Bool(true));
+        env.set("NIL".to_string(), Object::Bool(false));
+        env
     }
 
     pub fn get(&self, key: &str) -> Option<&Object> {
         self.store.get(key)
     }
-    
+
     pub fn set(&mut self, key: String, value: Object) {
         self.store.insert(key, value);
     }

@@ -47,16 +47,20 @@ fn add_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
 }
 
 fn minus_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
-    let mut result = 0;
+    if let Some(Object::Integer(first_value)) = args.get(0) {
+        let mut result = *first_value;
 
-    for arg in args {
-        match arg {
-            Object::Integer(n) => result -= n,
-            _ => return Err("Cannot use + with non-integer values".to_string()),
+        for arg in &args[1..] {
+            match arg {
+                Object::Integer(n) => result -= n,
+                _ => return Err("Cannot use - with non-integer values".to_string()),
+            }
         }
-    }
 
-    Ok(Object::Integer(result))
+        Ok(Object::Integer(result))
+    } else {
+        Err("First argument must be an integer".to_string())
+    }
 }
 
 fn multiply_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
@@ -136,12 +140,12 @@ fn greater_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String>
         match (item1, item2) {
             (Object::Bool(bool1), Object::Bool(bool2)) => {
                 if bool1 <= bool2 {
-                    return Ok(Object::Bool(false)); 
+                    return Ok(Object::Bool(false));
                 }
             }
             (Object::Integer(int1), Object::Integer(int2)) => {
                 if int1 <= int2 {
-                    return Ok(Object::Bool(false)); 
+                    return Ok(Object::Bool(false));
                 }
             }
             _ => {
@@ -165,12 +169,12 @@ fn lesser_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> 
         match (item1, item2) {
             (Object::Bool(bool1), Object::Bool(bool2)) => {
                 if bool1 >= bool2 {
-                    return Ok(Object::Bool(false)); 
+                    return Ok(Object::Bool(false));
                 }
             }
             (Object::Integer(int1), Object::Integer(int2)) => {
                 if int1 >= int2 {
-                    return Ok(Object::Bool(false)); 
+                    return Ok(Object::Bool(false));
                 }
             }
             _ => {
@@ -181,7 +185,6 @@ fn lesser_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> 
 
     Ok(Object::Bool(true))
 }
-
 
 pub fn let_function(args: Vec<Object>, env: &mut Env) -> Result<Object, String> {
     if args.len() != 2 {

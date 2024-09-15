@@ -9,7 +9,7 @@ pub enum Object {
     Symbol(String),
     Bool(bool),
     List(Vec<Object>),
-    Void()
+    Void(),
 }
 
 impl fmt::Display for Object {
@@ -56,7 +56,7 @@ fn parse_list(tokens: &mut Vec<Token>) -> Result<Object, String> {
             }
             Token::Integer(n) => list.push(Object::Integer(n)),
             Token::Symbol(s) => list.push(Object::Symbol(s)),
-            Token::String(s) => list.push(Object::String(s))
+            Token::String(s) => list.push(Object::String(s)),
         }
     }
 

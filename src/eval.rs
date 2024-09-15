@@ -32,7 +32,7 @@ fn eval_list(list: &Vec<Object>, env: &mut Env) -> Result<Object, String> {
 
     if let Object::Symbol(ref s) = func {
         if s == "let" {
-            return builtins::let_function(args.to_vec(), env)
+            return builtins::let_function(args.to_vec(), env);
         }
     }
 

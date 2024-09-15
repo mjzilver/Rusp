@@ -4,6 +4,9 @@ This project is a simple LISP interpreter written in Rust, inspired by "Writing 
 
 It is purely for my own educational purposes.
 
+## Lisp Spec
+http://clhs.lisp.se/Front/index.htm
+
 ## Built-ins
 - [x] `+`
 - [x] `-`
