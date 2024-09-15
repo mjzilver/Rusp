@@ -7,16 +7,6 @@ pub fn start() {
     let mut s = String::new();
     let mut env = Env::new();
 
-
-    print!("{}", handle_input(r#"
-    (defun classify_number (n)
-    (if (> n 10)
-        "Above 10"
-        "Under 10"))
-
-    (print (classify_number 1))
-"#, &mut env));
-
     loop {
         print!("> ");
         std::io::stdout().flush().expect("Failed to flush stdout");
@@ -166,30 +156,32 @@ mod tests {
         // Arrange
         let mut env = Env::new();
         let test_cases = vec![
-            ("(defun add 
-                (a b)
-                (+ a b)) 
-            (add 1 2)", "3"),
-            (r#"
+            (
+                "(defun add 
+                    (a b)
+                    (+ a b)) 
+                (add 1 2)",
+                "3",
+            ),
+            (
+                r#"
                 (defun classify_number (n)
                 (if (> n 10)
                     "Above 10"
                     "Under 10"))
     
-                (print (classify_number 1))
-            "#, "Under 10")
+                (classify_number 1)
+                "#,
+                "\"Under 10\"",
+            ),
         ];
-    
+
         for (input, expected_output) in test_cases {
             // Act
             let result = handle_input(input, &mut env);
-    
-            // Debug output
-            println!("Input: {}\nResult: {}\nExpected: {}\n", input, result, expected_output);
-    
+
             // Assert
-            assert_eq!(result, expected_output, 
-                "Failed for input: {}.\nWanted={} \nGot={}", input, expected_output, result);
+            assert_eq!(result, expected_output, "Failed for input: {}", input);
         }
     }
 }

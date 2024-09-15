@@ -63,7 +63,7 @@ impl fmt::Display for Object {
                 write!(f, ")")
             }
             Object::Void() => Ok(()),
-            Object::Stack(_) => write!(f, "-- STACK - Should not be printed"),
+            Object::Stack(_) => write!(f, "Stack"),
         }
     }
 }

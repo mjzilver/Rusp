@@ -112,6 +112,10 @@ fn divide_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> 
 }
 
 fn print_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
+    if args.is_empty() {
+        return Err("No args given to print".to_string());
+    }
+
     for arg in args {
         match arg {
             Object::Integer(n) => println!("{}", n),
@@ -244,7 +248,10 @@ fn if_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
 
 pub fn defun_function(args: Vec<Object>, env: &mut Env) -> Result<Object, String> {
     if args.len() != 3 {
-        return Err(format!("Incorrect number of arguments for defun want 3 got={}", args.len()));
+        return Err(format!(
+            "Incorrect number of arguments for defun want 3 got={}",
+            args.len()
+        ));
     }
 
     if let Object::Symbol(ref name) = &args[0] {
