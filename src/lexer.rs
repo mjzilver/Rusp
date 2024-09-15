@@ -21,7 +21,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                 tokens.push(Token::RParen);
                 chars.next();
             }
-            '1'..='9' => {
+            '0'..='9' => {
                 let mut number = String::new();
                 while let Some(&ch) = chars.peek() {
                     if ch.is_numeric() {
@@ -33,7 +33,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                 }
                 tokens.push(Token::Integer(number.parse::<i64>().unwrap()));
             }
-            _ if ch.is_alphabetic() || ch == '_' => {
+            _ if ch.is_alphabetic()  => {
                 let mut ident = String::new();
                 while let Some(&ch) = chars.peek() {
                     if ch.is_alphabetic() || ch == '_' {

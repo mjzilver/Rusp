@@ -23,7 +23,7 @@ https://rextester.com/l/common_lisp_online_compiler
 (fizzbuzz 30)
 ```
 
-## Built-ins
+## Arithmetic & Comparison
 - [x] `+`
 - [x] `-`
 - [x] `*`
@@ -31,16 +31,36 @@ https://rextester.com/l/common_lisp_online_compiler
 - [x] `>`
 - [x] `<`
 - [x] `=`
+- [x] `/=`
 - [x] `not`
 - [ ] `mod`
+- [ ] `rem`
+
+## Built-ins
 - [x] `let`
 - [x] `print`
 - [ ] `len`
-- [ ] `if`
+- [x] `if` 
+```lisp
+;; else is optional
+(if condition then-expression else-expression) 
+```
 - [ ] `loop`
-- [ ] `cond`
-- [ ] `zerop` - Tests if a number is zero.
-- [ ] `functions`
+- [ ] `cond` 
+```lisp
+(cond 
+    (condition1 expression1) 
+    (condition2 expression2) 
+    (t default-expression))
+```
+- [ ] `zerop` - `(zerop number)`
+- [ ] `defun`
+```lisp
+(defun function-name (parameters) body)
+```
 - [ ] `lists`
 - [ ] `dotimes`
 - [ ] `format`
+```lisp
+(format destination control-string &rest args)`
+```

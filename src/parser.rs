@@ -9,9 +9,17 @@ pub enum Object {
     Symbol(String),
     Bool(bool),
     List(Vec<Object>),
+    // Stack is just lines in a program file
+    Stack(Vec<Object>),
     Void(),
+    Function {
+        name: String,
+        params: Vec<Object>,
+        body: Vec<Object>,
+    },
 }
 
+// This is essentially only for debugging
 impl fmt::Display for Object {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -31,7 +39,31 @@ impl fmt::Display for Object {
                 }
                 write!(f, ")")
             }
+            Object::Function { name, params, body } => {
+                write!(f, "Function: {}\n", name)?;
+                write!(f, "Parameters: [")?;
+                let mut first = true;
+                for param in params {
+                    if !first {
+                        write!(f, ", ")?;
+                    }
+                    first = false;
+                    write!(f, "{}", param)?;
+                }
+                write!(f, "]\n")?;
+                write!(f, "Body: (")?;
+                let mut first = true;
+                for expr in body {
+                    if !first {
+                        write!(f, " ")?;
+                    }
+                    first = false;
+                    write!(f, "{}", expr)?;
+                }
+                write!(f, ")")
+            }
             Object::Void() => Ok(()),
+            Object::Stack(_) => write!(f, "-- STACK - Should not be printed"),
         }
     }
 }
@@ -43,27 +75,25 @@ pub fn parse(tokens: &[Token]) -> Result<Object, String> {
 }
 
 fn parse_list(tokens: &mut Vec<Token>) -> Result<Object, String> {
-    let mut list = Vec::new();
+    let mut stack = Vec::new();
 
     while let Some(token) = tokens.pop() {
         match token {
             Token::LParen => {
                 let sub_list = parse_list(tokens)?;
-                list.push(sub_list);
+                stack.push(sub_list);
             }
             Token::RParen => {
-                return Ok(Object::List(list));
+                return Ok(Object::List(stack));
             }
-            Token::Integer(n) => list.push(Object::Integer(n)),
-            Token::Symbol(s) => list.push(Object::Symbol(s)),
-            Token::String(s) => list.push(Object::String(s)),
+            Token::Integer(n) => stack.push(Object::Integer(n)),
+            Token::Symbol(s) => stack.push(Object::Symbol(s)),
+            Token::String(s) => stack.push(Object::String(s)),
         }
     }
 
-    if list.len() == 1 {
-        Ok(list.pop().unwrap())
-    } else if list.len() > 1 {
-        Ok(Object::List(list))
+    if stack.len() != 0 {
+        Ok(Object::Stack(stack))
     } else {
         Err("Parsing error".to_owned())
     }
@@ -74,7 +104,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_add() {
+    fn test_parsing_single_list() {
         let mut tokens = Vec::new();
         tokens.push(Token::LParen);
         tokens.push(Token::Symbol("+".to_owned()));
@@ -85,11 +115,11 @@ mod tests {
         let list = parse(&tokens).unwrap();
         assert_eq!(
             list,
-            Object::List(vec![
+            Object::Stack(vec![Object::List(vec![
                 Object::Symbol("+".to_string()),
                 Object::Integer(2),
                 Object::Integer(3),
-            ])
+            ])])
         );
     }
 }

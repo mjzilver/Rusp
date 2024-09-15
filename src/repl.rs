@@ -1,12 +1,21 @@
-use crate::env::Env;
-use crate::eval::eval;
 use crate::lexer::tokenize;
 use crate::parser::parse;
+use crate::{env::Env, eval::eval_stack};
 use std::io::{stdin, Write};
 
 pub fn start() {
     let mut s = String::new();
     let mut env = Env::new();
+
+
+    print!("{}", handle_input(r#"
+    (defun classify_number (n)
+    (if (> n 10)
+        "Above 10"
+        "Under 10"))
+
+    (print (classify_number 1))
+"#, &mut env));
 
     loop {
         print!("> ");
@@ -28,8 +37,8 @@ pub fn handle_input(input: &str, env: &mut Env) -> String {
     let tokens = tokenize(input);
 
     match parse(&tokens) {
-        Ok(parsed_object) => match eval(parsed_object, env) {
-            Ok(result) => result.to_string(),
+        Ok(stack) => match eval_stack(stack, env) {
+            Ok(result) => result,
             Err(e) => format!("Evaluation Error: {}", e),
         },
         Err(e) => format!("Parse Error: {}", e),
@@ -139,6 +148,8 @@ mod tests {
         let test_cases = vec![
             ("(if (> 5 3) 1 0)", "1"),
             ("(if (< 2 1) 10 20)", "20"),
+            ("(if (< 7 1) 1)", "NIL"),
+            ("(if (>= 1 1) 1)", "1"),
         ];
 
         for (input, expected_output) in test_cases {
@@ -150,4 +161,35 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_handle_defun() {
+        // Arrange
+        let mut env = Env::new();
+        let test_cases = vec![
+            ("(defun add 
+                (a b)
+                (+ a b)) 
+            (add 1 2)", "3"),
+            (r#"
+                (defun classify_number (n)
+                (if (> n 10)
+                    "Above 10"
+                    "Under 10"))
+    
+                (print (classify_number 1))
+            "#, "Under 10")
+        ];
+    
+        for (input, expected_output) in test_cases {
+            // Act
+            let result = handle_input(input, &mut env);
+    
+            // Debug output
+            println!("Input: {}\nResult: {}\nExpected: {}\n", input, result, expected_output);
+    
+            // Assert
+            assert_eq!(result, expected_output, 
+                "Failed for input: {}.\nWanted={} \nGot={}", input, expected_output, result);
+        }
+    }
 }

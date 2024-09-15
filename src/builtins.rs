@@ -21,8 +21,12 @@ pub fn get_builtin_function(name: &str) -> Option<BuiltInFunction> {
 
         // Variables
         "let" => Some(let_function),
+        "defun" => Some(defun_function),
 
-        // Print
+        // control flow
+        "if" => Some(if_function),
+
+        // IO
         "print" => Some(print_function),
         _ => None,
     }
@@ -218,6 +222,60 @@ fn not_equals_all(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
     }
 
     Ok(Object::Bool(true))
+}
+
+fn if_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
+    if args.len() < 2 || args.len() > 3 {
+        return Err("Incorrect number of arguments for if".to_string());
+    }
+
+    if let Object::Bool(ref bool) = args[0] {
+        if *bool {
+            return Ok(args[1].clone());
+        }
+
+        if args.len() == 3 {
+            return Ok(args[2].clone());
+        }
+    }
+
+    Ok(Object::Bool(false))
+}
+
+pub fn defun_function(args: Vec<Object>, env: &mut Env) -> Result<Object, String> {
+    if args.len() != 3 {
+        return Err(format!("Incorrect number of arguments for defun want 3 got={}", args.len()));
+    }
+
+    if let Object::Symbol(ref name) = &args[0] {
+        let params = match &args[1] {
+            Object::List(list) => list.clone(),
+            _ => return Err("Second argument to defun must be a list of parameters".to_string()),
+        };
+
+        let body = match &args[2] {
+            Object::List(list) => list.clone(),
+            _ => {
+                return Err(
+                    "Third argument to defun must be a list representing the function body"
+                        .to_string(),
+                )
+            }
+        };
+
+        env.set(
+            name.clone(),
+            Object::Function {
+                name: name.to_string(),
+                params,
+                body,
+            },
+        );
+
+        Ok(Object::Void())
+    } else {
+        Err("First argument to defun must be a symbol".to_string())
+    }
 }
 
 pub fn let_function(args: Vec<Object>, env: &mut Env) -> Result<Object, String> {
