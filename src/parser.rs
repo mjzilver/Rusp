@@ -4,22 +4,23 @@ use crate::lexer::Token;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Object {
+    // Stack holds all the lines in the program
+    Stack(Vec<Object>),
+
     Integer(i64),
     String(String),
     Symbol(String),
     Bool(bool),
     List(Vec<Object>),
-    // Stack is just lines in a program file
-    Stack(Vec<Object>),
-    Void(),
     Function {
         name: String,
         params: Vec<Object>,
         body: Vec<Object>,
     },
+    Void(),
 }
 
-// This is essentially only for debugging
+// Used by the print function and debugging
 impl fmt::Display for Object {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {

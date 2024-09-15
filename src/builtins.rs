@@ -398,11 +398,32 @@ pub fn let_function(args: Vec<Object>, env: &mut Env) -> Result<Object, String> 
         return Err("Incorrect number of arguments for let".to_string());
     }
 
-    if let Object::Symbol(ref name) = args[0] {
-        let value = eval(args[1].clone(), env)?;
-        env.set(name.clone(), value.clone());
-        Ok(value)
+    let bindings = &args[0];
+    let body = &args[1];
+
+    if let Object::List(ref bindings_list) = bindings {
+        let mut local_env = env.clone();
+
+        for binding in bindings_list {
+            if let Object::List(ref pair) = binding {
+                if pair.len() != 2 {
+                    return Err("Each binding must be a list of two elements".to_string());
+                }
+
+                let var = &pair[0];
+                let value = eval(pair[1].clone(), &mut local_env)?;
+                if let Object::Symbol(ref var_name) = var {
+                    local_env.set(var_name.clone(), value);
+                } else {
+                    return Err("Binding variable must be a symbol".to_string());
+                }
+            } else {
+                return Err("Each binding must be a list".to_string());
+            }
+        }
+
+        eval(body.clone(), &mut local_env)
     } else {
-        Err("First argument to let must be a symbol".to_string())
+        Err("First argument to let must be a list of bindings".to_string())
     }
 }

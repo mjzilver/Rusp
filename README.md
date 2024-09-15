@@ -33,19 +33,17 @@ https://rextester.com/l/common_lisp_online_compiler
 - [x] `=`
 - [x] `/=`
 - [x] `not`
-- [ ] `mod`
+- [x] `mod`
 
 ## Built-ins
 - [x] `let`
 - [x] `print`
-- [ ] `len`
 - [x] `if` 
 ```lisp
 ;; else is optional
 (if condition then-expression else-expression) 
 ```
-- [ ] `loop`
-- [ ] `cond` 
+- [x] `cond` 
 ```lisp
 (cond 
     (condition1 expression1) 
@@ -57,4 +55,4 @@ https://rextester.com/l/common_lisp_online_compiler
 ```lisp
 (defun function-name (parameters) body)
 ```
-- [ ] `dotimes`
+- [x] `dotimes`
