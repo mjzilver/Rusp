@@ -1,7 +1,10 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use crate::builtins::{self, get_builtin_function};
 use crate::{env::Env, parser::Object};
 
-pub fn eval(object: Object, env: &mut Env) -> Result<Object, String> {
+pub fn eval(object: Object, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     match object {
         Object::Integer(_) => Ok(object),
         Object::String(_) => Ok(object),
@@ -16,7 +19,7 @@ pub fn eval(object: Object, env: &mut Env) -> Result<Object, String> {
     }
 }
 
-pub fn eval_stack(stack_object: Object, env: &mut Env) -> Result<String, String> {
+pub fn eval_stack(stack_object: Object, env: &mut Rc<RefCell<Env>>) -> Result<String, String> {
     let mut output = String::new();
     if let Object::Stack(ref stack) = stack_object {
         for object in stack {
@@ -32,17 +35,17 @@ pub fn eval_stack(stack_object: Object, env: &mut Env) -> Result<String, String>
     Err("Eval stack requires a stack object".to_string())
 }
 
-fn eval_symbol(s: &String, env: &mut Env) -> Result<Object, String> {
+fn eval_symbol(s: &String, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     if let Some(_) = get_builtin_function(s) {
         return Ok(Object::Symbol(s.clone()));
     }
 
-    env.get(s)
-        .cloned()
+    env.borrow_mut()
+        .get(s)
         .ok_or_else(|| format!("Undefined symbol: {}", s))
 }
 
-fn eval_list(list: &Vec<Object>, env: &mut Env) -> Result<Object, String> {
+fn eval_list(list: &Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     if list.is_empty() {
         return Err("Empty list".to_string());
     }
@@ -57,6 +60,7 @@ fn eval_list(list: &Vec<Object>, env: &mut Env) -> Result<Object, String> {
             "defun" => return builtins::defun_function(args.to_vec(), env),
             "dotimes" => return builtins::dotimes_function(args.to_vec(), env),
             "cond" => return builtins::cond_function(args.to_vec(), env),
+            "setq" => return builtins::setq_function(args.to_vec(), env),
             _ => {}
         }
     }
@@ -64,7 +68,7 @@ fn eval_list(list: &Vec<Object>, env: &mut Env) -> Result<Object, String> {
     apply_function(func, args.to_vec(), env)
 }
 
-fn apply_function(func: Object, args: Vec<Object>, env: &mut Env) -> Result<Object, String> {
+fn apply_function(func: Object, args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     let evaluated_args: Result<Vec<Object>, String> =
         args.into_iter().map(|arg| eval(arg, env)).collect();
     let evaluated_args = evaluated_args?;
@@ -87,7 +91,7 @@ fn apply_function(func: Object, args: Vec<Object>, env: &mut Env) -> Result<Obje
 
             let mut local_env = env.clone();
             for (param, arg) in params.into_iter().zip(evaluated_args) {
-                local_env.set(param.to_string(), arg);
+                local_env.borrow_mut().set(param.to_string(), arg);
             }
 
             eval_list(&body, &mut local_env)
@@ -105,7 +109,7 @@ mod tests {
     #[test]
     fn test_eval_addition() {
         // Arrange
-        let mut env = Env::new();
+        let mut env = Rc::new(RefCell::new(Env::new()));
         let input = Object::List(vec![
             Object::Symbol("+".to_string()),
             Object::Integer(1),

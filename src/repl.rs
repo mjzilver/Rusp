@@ -1,11 +1,13 @@
 use crate::lexer::tokenize;
 use crate::parser::parse;
 use crate::{env::Env, eval::eval_stack};
+use std::cell::RefCell;
 use std::io::{stdin, Write};
+use std::rc::Rc;
 
 pub fn start() {
     let mut s = String::new();
-    let mut env = Env::new();
+    let mut env = Rc::new(RefCell::new(Env::new()));
 
     loop {
         print!("> ");
@@ -23,7 +25,7 @@ pub fn start() {
     }
 }
 
-pub fn handle_input(input: &str, env: &mut Env) -> String {
+pub fn handle_input(input: &str, env: &mut Rc<RefCell<Env>>) -> String {
     let tokens = tokenize(input);
 
     match parse(&tokens) {

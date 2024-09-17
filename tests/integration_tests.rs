@@ -1,11 +1,13 @@
 #[cfg(test)]
 mod tests {
+    use std::{cell::RefCell, rc::Rc};
+
     use rusp::{handle_input, Env};
 
     #[test]
     fn test_handle_arithmetic() {
         // Arrange
-        let mut env = Env::new();
+        let mut env = Rc::new(RefCell::new(Env::new()));
         let test_cases = vec![
             // Addition
             ("(+ 1 2)", "3"),
@@ -41,7 +43,7 @@ mod tests {
     #[test]
     fn test_handle_comparisons() {
         // Arrange
-        let mut env = Env::new();
+        let mut env = Rc::new(RefCell::new(Env::new()));
         let test_cases = vec![
             // Equality
             ("(= 1 1)", "T"),
@@ -70,7 +72,7 @@ mod tests {
     #[test]
     fn test_handle_two_char_comparisons() {
         // Arrange
-        let mut env = Env::new();
+        let mut env = Rc::new(RefCell::new(Env::new()));
         let test_cases = vec![
             // Inequality
             ("(/= 1 1)", "NIL"),
@@ -97,7 +99,7 @@ mod tests {
     #[test]
     fn test_handle_if() {
         // Arrange
-        let mut env = Env::new();
+        let mut env = Rc::new(RefCell::new(Env::new()));
         let test_cases = vec![
             ("(if (> 5 3) 1 0)", "1"),
             ("(if (< 2 1) 10 20)", "20"),
@@ -117,7 +119,7 @@ mod tests {
     #[test]
     fn test_handle_defun() {
         // Arrange
-        let mut env = Env::new();
+        let mut env = Rc::new(RefCell::new(Env::new()));
         let test_cases = vec![
             (
                 "(defun add 
@@ -151,7 +153,7 @@ mod tests {
     #[test]
     fn test_fizzbuzz() {
         // Arrange
-        let mut env = Env::new();
+        let mut env = Rc::new(RefCell::new(Env::new()));
         let test_cases = vec![(
             r#"
                 (defun fizzbuzz (n)
@@ -164,10 +166,34 @@ mod tests {
                         (T (print num))))))
 
                 (fizzbuzz 30)
-                "#,
+            "#,
             // if no errors occur = ""
-            // To do find a way to get the proper output
+            // TODO find a way to get the proper output
             "",
+        )];
+
+        for (input, expected_output) in test_cases {
+            // Act
+            let result = handle_input(input, &mut env);
+
+            // Assert
+            assert_eq!(result, expected_output, "Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn test_recursion() {
+        // Arrange
+        let mut env = Rc::new(RefCell::new(Env::new()));
+        let test_cases = vec![(
+            r#"
+                (defun sum (n)
+                (if (zerop n)
+                    0
+                    (+ n (sum (- n 1)))))
+                (sum 5)
+            "#,
+            "15",
         )];
 
         for (input, expected_output) in test_cases {

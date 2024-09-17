@@ -9,7 +9,9 @@ http://clhs.lisp.se/Front/index.htm
 
 https://rextester.com/l/common_lisp_online_compiler 
 
-## My goal
+## My goals
+
+### Goal 1: Done
 ```lisp
 (defun fizzbuzz (n)
   (dotimes (i n)
@@ -22,37 +24,12 @@ https://rextester.com/l/common_lisp_online_compiler
 
 (fizzbuzz 30)
 ```
+### Goal 2
+```lisp
+(defun fact (n)
+  (if (zerop n)
+      1
+      (* n (fact (- n 1)))))
 
-## Arithmetic & Comparison
-- [x] `+`
-- [x] `-`
-- [x] `*`
-- [x] `/`
-- [x] `>`
-- [x] `<`
-- [x] `=`
-- [x] `/=`
-- [x] `not`
-- [x] `mod`
-
-## Built-ins
-- [x] `let`
-- [x] `print`
-- [x] `if` 
-```lisp
-;; else is optional
-(if condition then-expression else-expression) 
+(fact 5)
 ```
-- [x] `cond` 
-```lisp
-(cond 
-    (condition1 expression1) 
-    (condition2 expression2) 
-    (t default-expression))
-```
-- [x] `zerop` - `(zerop number)`
-- [x] `defun`
-```lisp
-(defun function-name (parameters) body)
-```
-- [x] `dotimes`

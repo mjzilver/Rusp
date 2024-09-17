@@ -1,6 +1,8 @@
+use std::{cell::RefCell, rc::Rc};
+
 use crate::{env::Env, eval::eval, parser::Object};
 
-pub type BuiltInFunction = fn(Vec<Object>, env: &mut Env) -> Result<Object, String>;
+pub type BuiltInFunction = fn(Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String>;
 
 pub fn get_builtin_function(name: &str) -> Option<BuiltInFunction> {
     match name {
@@ -25,6 +27,7 @@ pub fn get_builtin_function(name: &str) -> Option<BuiltInFunction> {
         // Variables
         "let" => Some(let_function),
         "defun" => Some(defun_function),
+        "setq" => Some(setq_function),
 
         // control flow
         "if" => Some(if_function),
@@ -37,7 +40,7 @@ pub fn get_builtin_function(name: &str) -> Option<BuiltInFunction> {
     }
 }
 
-fn add_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
+fn add_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     if let Some(Object::Integer(_)) = args.get(0) {
         let mut sum = 0;
 
@@ -65,7 +68,7 @@ fn add_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
     }
 }
 
-fn minus_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
+fn minus_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     if let Some(Object::Integer(first_value)) = args.get(0) {
         let mut result = *first_value;
 
@@ -82,7 +85,7 @@ fn minus_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
     }
 }
 
-fn multiply_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
+fn multiply_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     if let Some(Object::Integer(first_value)) = args.get(0) {
         let mut result = *first_value;
 
@@ -99,7 +102,7 @@ fn multiply_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String
     }
 }
 
-fn divide_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
+fn divide_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     if let Some(Object::Integer(first_value)) = args.get(0) {
         let mut result = *first_value;
 
@@ -116,7 +119,7 @@ fn divide_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> 
     }
 }
 
-fn mod_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
+fn mod_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     if args.len() != 2 {
         return Err("Incorrect number of arguments for mod".to_string());
     }
@@ -138,7 +141,7 @@ fn mod_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
     Ok(Object::Integer(a % b))
 }
 
-fn print_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
+fn print_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     if args.is_empty() {
         return Err("No args given to print".to_string());
     }
@@ -155,7 +158,7 @@ fn print_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
     Ok(Object::Void())
 }
 
-fn not_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
+fn not_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     if args.len() != 1 {
         return Err("Incorrect number of arguments for let".to_string());
     }
@@ -239,7 +242,7 @@ fn equals(item1: &Object, item2: &Object) -> bool {
     }
 }
 
-fn not_equals_all(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
+fn not_equals_all(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     if args.len() < 2 {
         return Err("Require at least 2 items to compare".to_string());
     }
@@ -255,7 +258,7 @@ fn not_equals_all(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
     Ok(Object::Bool(true))
 }
 
-fn zerop_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
+fn zerop_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     if args.len() != 1 {
         return Err("Incorrect number of arguments for zerop".to_string());
     }
@@ -266,9 +269,10 @@ fn zerop_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
     }
 }
 
-fn and_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
+fn and_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     for arg in args {
-        let result = eval(arg, &mut Env::new())?;
+        let mut child_env = Rc::new(RefCell::new(Env::new_child(env.clone())));
+        let result = eval(arg, &mut child_env)?;
         if let Object::Bool(false) = result {
             return Ok(Object::Bool(false));
         }
@@ -277,7 +281,7 @@ fn and_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
     Ok(Object::Bool(true))
 }
 
-fn if_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
+fn if_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     if args.len() < 2 || args.len() > 3 {
         return Err("Incorrect number of arguments for if".to_string());
     }
@@ -295,7 +299,7 @@ fn if_function(args: Vec<Object>, _env: &mut Env) -> Result<Object, String> {
     Ok(Object::Bool(false))
 }
 
-pub fn dotimes_function(args: Vec<Object>, env: &mut Env) -> Result<Object, String> {
+pub fn dotimes_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     if args.len() != 2 {
         return Err("dotimes expects 2 arguments".to_string());
     }
@@ -323,7 +327,7 @@ pub fn dotimes_function(args: Vec<Object>, env: &mut Env) -> Result<Object, Stri
 
     for i in 0..limit {
         let mut local_env = env.clone();
-        local_env.set(loop_var.clone(), Object::Integer(i));
+        local_env.borrow_mut().set(loop_var.clone(), Object::Integer(i));
 
         let result = eval(body.clone(), &mut local_env);
         if result.is_err() {
@@ -334,7 +338,7 @@ pub fn dotimes_function(args: Vec<Object>, env: &mut Env) -> Result<Object, Stri
     Ok(Object::Void())
 }
 
-pub fn cond_function(args: Vec<Object>, env: &mut Env) -> Result<Object, String> {
+pub fn cond_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     for clause in &args {
         match clause {
             Object::List(pair) if pair.len() == 2 => {
@@ -354,7 +358,7 @@ pub fn cond_function(args: Vec<Object>, env: &mut Env) -> Result<Object, String>
     Ok(Object::Bool(false))
 }
 
-pub fn defun_function(args: Vec<Object>, env: &mut Env) -> Result<Object, String> {
+pub fn defun_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     if args.len() != 3 {
         return Err(format!(
             "Incorrect number of arguments for defun want 3 got={}",
@@ -378,7 +382,7 @@ pub fn defun_function(args: Vec<Object>, env: &mut Env) -> Result<Object, String
             }
         };
 
-        env.set(
+        env.borrow_mut().set(
             name.clone(),
             Object::Function {
                 name: name.to_string(),
@@ -393,7 +397,7 @@ pub fn defun_function(args: Vec<Object>, env: &mut Env) -> Result<Object, String
     }
 }
 
-pub fn let_function(args: Vec<Object>, env: &mut Env) -> Result<Object, String> {
+pub fn let_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     if args.len() != 2 {
         return Err("Incorrect number of arguments for let".to_string());
     }
@@ -413,7 +417,7 @@ pub fn let_function(args: Vec<Object>, env: &mut Env) -> Result<Object, String> 
                 let var = &pair[0];
                 let value = eval(pair[1].clone(), &mut local_env)?;
                 if let Object::Symbol(ref var_name) = var {
-                    local_env.set(var_name.clone(), value);
+                    local_env.borrow_mut().set(var_name.clone(), value);
                 } else {
                     return Err("Binding variable must be a symbol".to_string());
                 }
@@ -425,5 +429,20 @@ pub fn let_function(args: Vec<Object>, env: &mut Env) -> Result<Object, String> 
         eval(body.clone(), &mut local_env)
     } else {
         Err("First argument to let must be a list of bindings".to_string())
+    }
+}
+
+
+pub fn setq_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
+    if args.len() != 2 {
+        return Err("Incorrect number of arguments for let".to_string());
+    }
+
+    if let Object::Symbol(ref name) = args[0] {
+        let value = eval(args[1].clone(), env)?;
+        env.borrow_mut().set(name.clone(), value.clone());
+        Ok(value)
+    } else {
+        Err("First argument to let must be a symbol".to_string())
     }
 }
