@@ -24,7 +24,11 @@ pub fn eval_stack(stack_object: Object, env: &mut Rc<RefCell<Env>>) -> Result<St
     if let Object::Stack(ref stack) = stack_object {
         for object in stack {
             match &eval(object.clone(), env) {
-                Ok(eval_obj) => output += &eval_obj.to_string(),
+                Ok(eval_obj) => {
+                    if std::env::var("DEBUG_MODE").is_ok() {
+                        output += &eval_obj.to_string();
+                    }
+                }
                 Err(err) => output += err,
             }
         }

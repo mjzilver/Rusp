@@ -35,6 +35,16 @@ https://rextester.com/l/common_lisp_online_compiler
 
 ### Goal 3
 ```lisp
+(setq my-list '(1 2 3 4 5))
+(first my-list)   ;; 1
+(nth 2 my-list)   ;; 3
+(push 0 my-list)  ;;  (0 1 2 3 4 5)
+(setq my-list (append my-list '(6)))  ;;  (0 1 2 3 4 5 6)
+(print my-list)
+```
+
+### Goal 4
+```lisp
 (defun ask-for-input ()
   (print "Please enter some input: ")
   (let ((user-input (read-line)))
@@ -43,6 +53,7 @@ https://rextester.com/l/common_lisp_online_compiler
 
 
 ### TODO
+- [ ] `lists`
 - [ ] `format`
 - [ ] `read-line`
 - [ ] `concatenate` (now + works for strings, it should not)

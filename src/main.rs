@@ -6,6 +6,6 @@ mod parser;
 mod repl;
 
 fn main() {
-    println!("Welcome to the Rusp (Rusted Lisp) programming language REPL (use :q to exit)");
+    println!("Welcome to the Rusp programming language REPL (use :q to exit)");
     repl::start();
 }

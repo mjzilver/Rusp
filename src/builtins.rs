@@ -29,7 +29,7 @@ pub fn get_builtin_function(name: &str) -> Option<BuiltInFunction> {
         "defun" => Some(defun_function),
         "setq" => Some(setq_function),
 
-        // control flow
+        // Control flow
         "if" => Some(if_function),
         "dotimes" => Some(dotimes_function),
         "cond" => Some(cond_function),

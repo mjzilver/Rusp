@@ -1,11 +1,13 @@
 #[cfg(test)]
 mod tests {
-    use std::{cell::RefCell, rc::Rc};
+    use std::{cell::RefCell, env, rc::Rc};
 
     use rusp::{handle_input, Env};
 
     #[test]
     fn test_handle_arithmetic() {
+        env::set_var("DEBUG_MODE", "1");
+
         // Arrange
         let mut env = Rc::new(RefCell::new(Env::new()));
         let test_cases = vec![
@@ -42,6 +44,8 @@ mod tests {
 
     #[test]
     fn test_handle_comparisons() {
+        env::set_var("DEBUG_MODE", "1");
+
         // Arrange
         let mut env = Rc::new(RefCell::new(Env::new()));
         let test_cases = vec![
@@ -71,6 +75,8 @@ mod tests {
 
     #[test]
     fn test_handle_two_char_comparisons() {
+        env::set_var("DEBUG_MODE", "1");
+
         // Arrange
         let mut env = Rc::new(RefCell::new(Env::new()));
         let test_cases = vec![
@@ -98,6 +104,8 @@ mod tests {
 
     #[test]
     fn test_handle_if() {
+        env::set_var("DEBUG_MODE", "1");
+
         // Arrange
         let mut env = Rc::new(RefCell::new(Env::new()));
         let test_cases = vec![
@@ -118,6 +126,8 @@ mod tests {
 
     #[test]
     fn test_handle_defun() {
+        env::set_var("DEBUG_MODE", "1");
+
         // Arrange
         let mut env = Rc::new(RefCell::new(Env::new()));
         let test_cases = vec![
@@ -152,6 +162,8 @@ mod tests {
 
     #[test]
     fn test_fizzbuzz() {
+        env::set_var("DEBUG_MODE", "1");
+
         // Arrange
         let mut env = Rc::new(RefCell::new(Env::new()));
         let test_cases = vec![(
@@ -167,7 +179,6 @@ mod tests {
 
                 (fizzbuzz 30)
             "#,
-            // if no errors occur = ""
             // TODO find a way to get the proper output
             "",
         )];
@@ -183,6 +194,8 @@ mod tests {
 
     #[test]
     fn test_recursion() {
+        env::set_var("DEBUG_MODE", "1");
+
         // Arrange
         let mut env = Rc::new(RefCell::new(Env::new()));
         let test_cases = vec![(

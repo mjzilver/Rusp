@@ -3,7 +3,7 @@ mod eval;
 mod lexer;
 mod parser;
 
-// Used my test project
+// Used by test project
 pub mod env;
 pub mod repl;
 pub use env::Env;

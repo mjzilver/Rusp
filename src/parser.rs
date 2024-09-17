@@ -20,7 +20,7 @@ pub enum Object {
     Void(),
 }
 
-// Used by the print function and debugging
+// Used for debugging and testing
 impl fmt::Display for Object {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
