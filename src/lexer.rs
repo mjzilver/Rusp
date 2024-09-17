@@ -33,6 +33,16 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                 }
                 tokens.push(Token::Integer(number.parse::<i64>().unwrap()));
             }
+            ';' => {
+                chars.next();
+                while let Some(&ch) = chars.peek() {
+                    if ch == '\n' {
+                        chars.next();
+                        break;
+                    }
+                    chars.next();
+                }
+            }
             _ if ch.is_alphabetic() => {
                 let mut ident = String::new();
                 while let Some(&ch) = chars.peek() {

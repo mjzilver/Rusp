@@ -32,3 +32,18 @@ https://rextester.com/l/common_lisp_online_compiler
 
 (fact 5)
 ```
+
+### Goal 3
+```lisp
+(defun ask-for-input ()
+  (print "Please enter some input: ")
+  (let ((user-input (read-line)))
+    (print (+ "You entered:" user-input))))
+```
+
+
+### TODO
+- [ ] `format`
+- [ ] `read-line`
+- [ ] `concatenate` (now + works for strings, it should not)
+- [ ] `format`

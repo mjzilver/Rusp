@@ -64,7 +64,7 @@ impl fmt::Display for Object {
                 write!(f, ")")
             }
             Object::Void() => Ok(()),
-            Object::Stack(_) => write!(f, "Stack"),
+            Object::Stack(_) => panic!("Cannot output stack"),
         }
     }
 }
