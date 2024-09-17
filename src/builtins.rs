@@ -291,7 +291,7 @@ pub fn if_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Obje
     let is_truthy = match condition {
         Object::Bool(false) => false,
         Object::Void() => false,
-        _ => true,  
+        _ => true,
     };
 
     if is_truthy {
@@ -302,7 +302,6 @@ pub fn if_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Obje
 
     Ok(Object::Void())
 }
-
 
 pub fn dotimes_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     if args.len() != 2 {
@@ -332,7 +331,9 @@ pub fn dotimes_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result
 
     for i in 0..limit {
         let mut local_env = env.clone();
-        local_env.borrow_mut().set(loop_var.clone(), Object::Integer(i));
+        local_env
+            .borrow_mut()
+            .set(loop_var.clone(), Object::Integer(i));
 
         let result = eval(body.clone(), &mut local_env);
         if result.is_err() {
@@ -428,7 +429,6 @@ pub fn let_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Obj
         Err("First argument to let must be a list of bindings".to_string())
     }
 }
-
 
 pub fn setq_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     if args.len() != 2 {

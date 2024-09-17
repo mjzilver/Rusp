@@ -69,7 +69,11 @@ fn eval_list(list: &Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, S
     apply_function(func, args.to_vec(), env)
 }
 
-fn apply_function(func: Object, args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
+fn apply_function(
+    func: Object,
+    args: Vec<Object>,
+    env: &mut Rc<RefCell<Env>>,
+) -> Result<Object, String> {
     let evaluated_args: Result<Vec<Object>, String> =
         args.into_iter().map(|arg| eval(arg, env)).collect();
     let evaluated_args = evaluated_args?;
@@ -95,12 +99,12 @@ fn apply_function(func: Object, args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -
                 local_env.borrow_mut().set(param.to_string(), arg);
             }
 
-            let mut last_result = Object::Void(); 
+            let mut last_result = Object::Void();
             for obj in body {
-                last_result = eval(obj, &mut local_env)?; 
+                last_result = eval(obj, &mut local_env)?;
             }
-            
-            Ok(last_result) 
+
+            Ok(last_result)
         }
         _ => Err("Function application on non-function".to_string()),
     }

@@ -36,7 +36,7 @@ pub fn tokenize(input: &str) -> Vec<Token> {
             _ if ch.is_alphabetic() => {
                 let mut ident = String::new();
                 while let Some(&ch) = chars.peek() {
-                    if ch.is_alphabetic() || ch == '_' {
+                    if ch.is_alphabetic() || ch == '_' || ch == '-' {
                         ident.push(ch);
                         chars.next();
                     } else {
