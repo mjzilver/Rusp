@@ -281,23 +281,28 @@ fn and_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object,
     Ok(Object::Bool(true))
 }
 
-fn if_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
+pub fn if_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     if args.len() < 2 || args.len() > 3 {
         return Err("Incorrect number of arguments for if".to_string());
     }
 
-    if let Object::Bool(ref bool) = args[0] {
-        if *bool {
-            return Ok(args[1].clone());
-        }
+    let condition = eval(args[0].clone(), env)?;
 
-        if args.len() == 3 {
-            return Ok(args[2].clone());
-        }
+    let is_truthy = match condition {
+        Object::Bool(false) => false,
+        Object::Void() => false,
+        _ => true,  
+    };
+
+    if is_truthy {
+        return Ok(eval(args[1].clone(), env)?);
+    } else if args.len() == 3 {
+        return Ok(eval(args[2].clone(), env)?);
     }
 
-    Ok(Object::Bool(false))
+    Ok(Object::Void())
 }
+
 
 pub fn dotimes_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     if args.len() != 2 {
@@ -359,9 +364,9 @@ pub fn cond_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Ob
 }
 
 pub fn defun_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    if args.len() != 3 {
+    if args.len() < 3 {
         return Err(format!(
-            "Incorrect number of arguments for defun want 3 got={}",
+            "Incorrect number of arguments for defun want at least 3 got={}",
             args.len()
         ));
     }
@@ -372,15 +377,7 @@ pub fn defun_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<O
             _ => return Err("Second argument to defun must be a list of parameters".to_string()),
         };
 
-        let body = match &args[2] {
-            Object::List(list) => list.clone(),
-            _ => {
-                return Err(
-                    "Third argument to defun must be a list representing the function body"
-                        .to_string(),
-                )
-            }
-        };
+        let body: Vec<Object> = args[2..].to_vec();
 
         env.borrow_mut().set(
             name.clone(),

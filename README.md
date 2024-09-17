@@ -10,8 +10,7 @@ http://clhs.lisp.se/Front/index.htm
 https://rextester.com/l/common_lisp_online_compiler 
 
 ## My goals
-
-### Goal 1: Done
+### Goal 1 - DONE
 ```lisp
 (defun fizzbuzz (n)
   (dotimes (i n)
@@ -24,7 +23,7 @@ https://rextester.com/l/common_lisp_online_compiler
 
 (fizzbuzz 30)
 ```
-### Goal 2
+### Goal 2 - DONE
 ```lisp
 (defun fact (n)
   (if (zerop n)

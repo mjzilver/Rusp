@@ -61,6 +61,7 @@ fn eval_list(list: &Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, S
             "dotimes" => return builtins::dotimes_function(args.to_vec(), env),
             "cond" => return builtins::cond_function(args.to_vec(), env),
             "setq" => return builtins::setq_function(args.to_vec(), env),
+            "if" => return builtins::if_function(args.to_vec(), env),
             _ => {}
         }
     }
@@ -94,7 +95,12 @@ fn apply_function(func: Object, args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -
                 local_env.borrow_mut().set(param.to_string(), arg);
             }
 
-            eval_list(&body, &mut local_env)
+            let mut last_result = Object::Void(); 
+            for obj in body {
+                last_result = eval(obj, &mut local_env)?; 
+            }
+            
+            Ok(last_result) 
         }
         _ => Err("Function application on non-function".to_string()),
     }
