@@ -29,10 +29,7 @@ impl Env {
     pub fn get(&self, key: &str) -> Option<Object> {
         match self.store.get(key) {
             Some(var) => Some(var.clone()),
-            None => self
-                .outer
-                .as_ref()
-                .and_then(|o| o.borrow().get(key).clone()),
+            None => self.outer.as_ref().and_then(|o| o.borrow_mut().get(key)),
         }
     }
 

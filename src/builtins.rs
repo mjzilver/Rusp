@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::{env::Env, eval::eval, parser::Object};
+use crate::{env::Env, eval::{eval, eval_symbol}, parser::Object};
 
 pub type BuiltInFunction = fn(Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String>;
 
@@ -28,6 +28,10 @@ pub fn get_builtin_function(name: &str) -> Option<BuiltInFunction> {
         "let" => Some(let_function),
         "defun" => Some(defun_function),
         "setq" => Some(setq_function),
+
+        // Lists
+        "push" => Some(push_function),
+        "reverse" => Some(reverse_function),
 
         // Control flow
         "if" => Some(if_function),
@@ -141,7 +145,7 @@ fn mod_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object
     Ok(Object::Integer(a % b))
 }
 
-fn print_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
+fn print_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     if args.is_empty() {
         return Err("No args given to print".to_string());
     }
@@ -151,6 +155,8 @@ fn print_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Obje
             Object::Integer(n) => println!("{}", n),
             Object::String(s) => println!("{}", s),
             Object::Bool(b) => println!("{}", b),
+            Object::DataList(_) => println!("{}", arg.to_string()),
+            Object::Symbol(s) => println!("{}", eval_symbol(&s, env)?),
             _ => return Err("Cannot print this type".to_string()),
         }
     }
@@ -281,6 +287,38 @@ fn and_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object,
     Ok(Object::Bool(true))
 }
 
+fn push_function(mut args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
+    if args.len() != 2 {
+        return Err("Incorrect number of arguments for push".to_string());
+    }
+
+    let obj = match &args[0] {
+        Object::Symbol(_) => eval(args.remove(0), env)?,
+        Object::Integer(_) | Object::String(_) | Object::Bool(_) => args.remove(0),
+        _ => return Err("Cannot add this to list".to_string()),
+    };
+
+    println!("{:?}", args[0]);
+
+    let list = match &args[0] {
+        Object::Symbol(s) => eval_symbol(s, env)?,
+        _ => return Err("Second argument must be a symbol referring to a DataList".to_string()),
+    };
+
+    if let Object::DataList(mut data_list) = list {
+        data_list.push(obj);
+    } else {
+        return Err("The symbol does not refer to a valid DataList".to_string())
+    }
+
+    Ok(Object::Void())
+}
+
+fn reverse_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
+    Ok(Object::Void())
+}
+
+// SPECIAL FORM UNDER THIS
 pub fn if_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     if args.len() < 2 || args.len() > 3 {
         return Err("Incorrect number of arguments for if".to_string());

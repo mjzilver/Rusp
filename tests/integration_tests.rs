@@ -217,4 +217,21 @@ mod tests {
             assert_eq!(result, expected_output, "Failed for input: {}", input);
         }
     }
+
+    #[test]
+    fn test_handle_datalist() {
+        env::set_var("DEBUG_MODE", "1");
+
+        // Arrange
+        let mut env = Rc::new(RefCell::new(Env::new()));
+        let test_cases = vec![("(setq a '(1 2 3))", "(1 2 3)")];
+
+        for (input, expected_output) in test_cases {
+            // Act
+            let result = handle_input(input, &mut env);
+
+            // Assert
+            assert_eq!(result, expected_output, "Failed for input: {}", input);
+        }
+    }
 }

@@ -5,6 +5,7 @@ pub enum Token {
     Symbol(String),
     LParen,
     RParen,
+    Apostrophe,
 }
 
 pub fn tokenize(input: &str) -> Vec<Token> {
@@ -13,6 +14,10 @@ pub fn tokenize(input: &str) -> Vec<Token> {
 
     while let Some(&ch) = chars.peek() {
         match ch {
+            '\'' => {
+                tokens.push(Token::Apostrophe);
+                chars.next();
+            }
             '(' => {
                 tokens.push(Token::LParen);
                 chars.next();

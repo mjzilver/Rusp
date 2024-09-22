@@ -9,37 +9,34 @@ pub fn eval(object: Object, env: &mut Rc<RefCell<Env>>) -> Result<Object, String
         Object::Integer(_) => Ok(object),
         Object::String(_) => Ok(object),
         Object::Bool(_) => Ok(object),
-        Object::Symbol(ref s) => eval_symbol(s, env),
+        Object::Symbol(s) => eval_symbol(&s, env),
         Object::List(ref list) => eval_list(list, env),
+        Object::DataList(ref list) => eval_data_list(list, env),
         Object::Void() => Ok(Object::Void()),
 
         // Functions do not get eval
         Object::Function { .. } => Err("Unexpected function object in this context".to_string()),
-        Object::Stack(_) => Err("Unexpected Stack object in this context".to_string()),
     }
 }
 
-pub fn eval_stack(stack_object: Object, env: &mut Rc<RefCell<Env>>) -> Result<String, String> {
+pub fn eval_stack(object_stack: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<String, String> {
     let mut output = String::new();
-    if let Object::Stack(ref stack) = stack_object {
-        for object in stack {
-            match &eval(object.clone(), env) {
-                Ok(eval_obj) => {
-                    if std::env::var("DEBUG_MODE").is_ok() {
-                        output += &eval_obj.to_string();
-                    }
-                }
-                Err(err) => output += err,
-            }
-        }
 
-        return Ok(output);
+    for object in object_stack {
+        match &eval(object.clone(), env) {
+            Ok(eval_obj) => {
+                if std::env::var("DEBUG_MODE").is_ok() {
+                    output += &eval_obj.to_string();
+                }
+            }
+            Err(err) => output += err,
+        }
     }
 
-    Err("Eval stack requires a stack object".to_string())
+    return Ok(output);
 }
 
-fn eval_symbol(s: &String, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
+pub fn eval_symbol(s: &String, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     if let Some(_) = get_builtin_function(s) {
         return Ok(Object::Symbol(s.clone()));
     }
@@ -73,6 +70,16 @@ fn eval_list(list: &Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, S
     apply_function(func, args.to_vec(), env)
 }
 
+fn eval_data_list(list: &Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
+    let mut eval_objects = Vec::new();
+
+    for obj in list {
+        eval_objects.push(eval(obj.clone(), env)?);
+    }
+
+    Ok(Object::DataList(eval_objects))
+}
+
 fn apply_function(
     func: Object,
     args: Vec<Object>,
@@ -87,7 +94,10 @@ fn apply_function(
             if let Some(built_in) = get_builtin_function(s.as_str()) {
                 built_in(evaluated_args, env)
             } else {
-                Err(format!("Unknown function: {}", s))
+                match eval_symbol(s, env) {
+                    Ok(f) => return apply_function(f, evaluated_args, env),
+                    Err(_) => Err(format!("Unknown function: {}", s))
+                }
             }
         }
         Object::Function { name, params, body } => {

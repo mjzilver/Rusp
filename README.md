@@ -51,7 +51,6 @@ https://rextester.com/l/common_lisp_online_compiler
     (print (+ "You entered:" user-input))))
 ```
 
-
 ### TODO
 - [ ] `lists`
 - [ ] `format`

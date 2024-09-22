@@ -5,6 +5,6 @@ mod parser;
 
 // Used by test project
 pub mod env;
-pub mod repl;
 pub use env::Env;
+pub mod repl;
 pub use repl::handle_input;
