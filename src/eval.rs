@@ -63,6 +63,7 @@ fn eval_list(list: &Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, S
             "cond" => return builtins::cond_function(args.to_vec(), env),
             "setq" => return builtins::setq_function(args.to_vec(), env),
             "if" => return builtins::if_function(args.to_vec(), env),
+            "push" => return builtins::push_function(args.to_vec(), env),
             _ => {}
         }
     }
@@ -96,7 +97,7 @@ fn apply_function(
             } else {
                 match eval_symbol(s, env) {
                     Ok(f) => return apply_function(f, evaluated_args, env),
-                    Err(_) => Err(format!("Unknown function: {}", s))
+                    Err(_) => Err(format!("Unknown function: {}", s)),
                 }
             }
         }

@@ -1,6 +1,10 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::{env::Env, eval::{eval, eval_symbol}, parser::Object};
+use crate::{
+    env::Env,
+    eval::{eval, eval_symbol},
+    parser::Object,
+};
 
 pub type BuiltInFunction = fn(Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String>;
 
@@ -32,6 +36,10 @@ pub fn get_builtin_function(name: &str) -> Option<BuiltInFunction> {
         // Lists
         "push" => Some(push_function),
         "reverse" => Some(reverse_function),
+        "first" => Some(|args, env| index_list_function(args, env, 0)),
+        "second" => Some(|args, env| index_list_function(args, env, 1)),
+        "third" => Some(|args, env| index_list_function(args, env, 2)),
+        "nth" => Some(nth_function),
 
         // Control flow
         "if" => Some(if_function),
@@ -166,7 +174,7 @@ fn print_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Objec
 
 fn not_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     if args.len() != 1 {
-        return Err("Incorrect number of arguments for let".to_string());
+        return Err("Incorrect number of arguments for not".to_string());
     }
 
     if let Object::Bool(ref bool) = args[0] {
@@ -287,7 +295,7 @@ fn and_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object,
     Ok(Object::Bool(true))
 }
 
-fn push_function(mut args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
+pub fn push_function(mut args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     if args.len() != 2 {
         return Err("Incorrect number of arguments for push".to_string());
     }
@@ -298,24 +306,73 @@ fn push_function(mut args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Ob
         _ => return Err("Cannot add this to list".to_string()),
     };
 
-    println!("{:?}", args[0]);
-
-    let list = match &args[0] {
-        Object::Symbol(s) => eval_symbol(s, env)?,
+    let symbol = match &args[0] {
+        Object::Symbol(s) => s,
         _ => return Err("Second argument must be a symbol referring to a DataList".to_string()),
     };
 
-    if let Object::DataList(mut data_list) = list {
-        data_list.push(obj);
-    } else {
-        return Err("The symbol does not refer to a valid DataList".to_string())
-    }
+    let mut data_list = match env.borrow_mut().get(symbol) {
+        Some(Object::DataList(list)) => list,
+        _ => return Err("The symbol does not refer to a valid DataList".to_string()),
+    };
 
-    Ok(Object::Void())
+    data_list.insert(0, obj);
+
+    env.borrow_mut()
+        .set(symbol.to_string(), Object::DataList(data_list));
+
+    Ok(env.borrow_mut().get(symbol).unwrap())
 }
 
-fn reverse_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    Ok(Object::Void())
+fn reverse_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
+    if args.len() != 1 {
+        return Err("Incorrect number of arguments for reverse".to_string());
+    }
+
+    let list = match &args[0] {
+        Object::DataList(list) => list,
+        _ => return Err("Argument must be a DataList".to_string()),
+    };
+    let mut reversed_list = list.clone();
+    reversed_list.reverse();
+
+    Ok(Object::DataList(reversed_list))
+}
+
+fn nth_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
+    if args.len() != 2 {
+        return Err("Incorrect number of arguments for nth".to_string());
+    }
+
+    let i = match &args[0] {
+        Object::Integer(i) => {
+            usize::try_from(*i).map_err(|_| "Index must be non-negative".to_string())?
+        }
+        _ => return Err("Second argument must be an integer".to_string()),
+    };
+
+    index_list_function(args[1..].to_vec(), env, i)
+}
+
+fn index_list_function(
+    args: Vec<Object>,
+    _env: &mut Rc<RefCell<Env>>,
+    i: usize,
+) -> Result<Object, String> {
+    if args.len() != 1 {
+        return Err("Incorrect number of arguments to index list".to_string());
+    }
+
+    let list = match &args[0] {
+        Object::DataList(list) => list,
+        _ => return Err("Argument must be a DataList".to_string()),
+    };
+
+    if i < list.len().try_into().unwrap() {
+        Ok(list[i].clone())
+    } else {
+        Err("Index out of bounds".to_string())
+    }
 }
 
 // SPECIAL FORM UNDER THIS
@@ -470,7 +527,7 @@ pub fn let_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Obj
 
 pub fn setq_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
     if args.len() != 2 {
-        return Err("Incorrect number of arguments for let".to_string());
+        return Err("Incorrect number of arguments for setq".to_string());
     }
 
     if let Object::Symbol(ref name) = args[0] {

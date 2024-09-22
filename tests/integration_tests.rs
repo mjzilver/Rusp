@@ -224,7 +224,10 @@ mod tests {
 
         // Arrange
         let mut env = Rc::new(RefCell::new(Env::new()));
-        let test_cases = vec![("(setq a '(1 2 3))", "(1 2 3)")];
+        let test_cases = vec![
+            ("(setq a '(1 2 3))", "(1 2 3)"),
+            ("(setq a '(1 2 3)) (push 8 a)", "(1 2 3)(8 1 2 3)"),
+        ];
 
         for (input, expected_output) in test_cases {
             // Act
