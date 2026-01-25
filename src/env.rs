@@ -6,6 +6,7 @@ use crate::parser::Object;
 pub struct Env {
     store: HashMap<String, Object>,
     outer: Option<Rc<RefCell<Env>>>,
+    #[cfg(test)]
     pub output_buffer: Vec<String>,
 }
 
@@ -14,6 +15,7 @@ impl Env {
         let mut env = Env {
             store: HashMap::new(),
             outer: None,
+            #[cfg(test)]
             output_buffer: Vec::new(),
         };
         env.set("T".to_string(), Object::Bool(true));
@@ -25,6 +27,7 @@ impl Env {
         Env {
             store: HashMap::new(),
             outer: Some(parent),
+            #[cfg(test)]
             output_buffer: Vec::new(),
         }
     }
@@ -40,16 +43,19 @@ impl Env {
         self.store.insert(key, value);
     }
 
+    #[cfg(test)]
     pub fn add_output(&mut self, output: String) {
         self.output_buffer.push(output);
     }
 
     #[allow(dead_code)]
+    #[cfg(test)]
     pub fn clear_output(&mut self) {
         self.output_buffer.clear();
     }
 
     #[allow(dead_code)]
+    #[cfg(test)]
     pub fn get_output(&self) -> String {
         self.output_buffer.join("\n")
     }

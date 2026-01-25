@@ -172,6 +172,8 @@ fn print_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Objec
         // Write to stdout for interactive use
         println!("{}", output);
         
+        // In test mode, also capture output in the environment
+        #[cfg(test)]
         env.borrow_mut().add_output(output);
     }
 

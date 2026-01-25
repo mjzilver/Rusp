@@ -184,7 +184,6 @@ mod tests {
         handle_input(input, &mut env);
         let output = env.borrow().get_output();
         
-        // Expected: 1 2 Fizz 4 Buzz Fizz 7 8 Fizz Buzz 11 Fizz 13 14 FizzBuzz
         let expected_lines = vec![
             "1", "2", "Fizz", "4", "Buzz", "Fizz", "7", "8", "Fizz", "Buzz",
             "11", "Fizz", "13", "14", "FizzBuzz"

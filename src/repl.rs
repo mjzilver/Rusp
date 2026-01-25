@@ -21,6 +21,8 @@ pub fn start() {
 fn handle_repl_loop(env: &mut Rc<RefCell<Env>>) {
     let mut s: String = String::new();
 
+    println!("Welcome to the Rusp programming language REPL (use exit to exit)");
+
     loop {
         print!("> ");
         std::io::stdout().flush().expect("Failed to flush stdout");
@@ -28,7 +30,7 @@ fn handle_repl_loop(env: &mut Rc<RefCell<Env>>) {
         s.clear();
         stdin().read_line(&mut s).expect("Incorrect input!");
 
-        if s.trim() == ":q" {
+        if s.trim() == "exit" {
             break;
         }
 
