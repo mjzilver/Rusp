@@ -166,30 +166,33 @@ mod tests {
 
         // Arrange
         let mut env = Rc::new(RefCell::new(Env::new()));
-        let test_cases = vec![(
-            r#"
-                (defun fizzbuzz (n)
-                (dotimes (i n)
-                    (let ((num (+ i 1)))
-                    (cond
-                        ((and (zerop (mod num 3)) (zerop (mod num 5))) (print "FizzBuzz"))
-                        ((zerop (mod num 3)) (print "Fizz"))
-                        ((zerop (mod num 5)) (print "Buzz"))
-                        (T (print num))))))
+        
+        let input = r#"
+            (defun fizzbuzz (n)
+            (dotimes (i n)
+                (let ((num (+ i 1)))
+                (cond
+                    ((and (zerop (mod num 3)) (zerop (mod num 5))) (print "FizzBuzz"))
+                    ((zerop (mod num 3)) (print "Fizz"))
+                    ((zerop (mod num 5)) (print "Buzz"))
+                    (T (print num))))))
 
-                (fizzbuzz 30)
-            "#,
-            // TODO find a way to get the proper output
-            "",
-        )];
+            (fizzbuzz 15)
+        "#;
+        
+        // Act
+        handle_input(input, &mut env);
+        let output = env.borrow().get_output();
+        
+        // Expected: 1 2 Fizz 4 Buzz Fizz 7 8 Fizz Buzz 11 Fizz 13 14 FizzBuzz
+        let expected_lines = vec![
+            "1", "2", "Fizz", "4", "Buzz", "Fizz", "7", "8", "Fizz", "Buzz",
+            "11", "Fizz", "13", "14", "FizzBuzz"
+        ];
+        let expected_output = expected_lines.join("\n");
 
-        for (input, expected_output) in test_cases {
-            // Act
-            let result = handle_input(input, &mut env);
-
-            // Assert
-            assert_eq!(result, expected_output, "Failed for input: {}", input);
-        }
+        // Assert
+        assert_eq!(output, expected_output, "FizzBuzz output doesn't match");
     }
 
     #[test]

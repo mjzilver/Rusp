@@ -159,18 +159,24 @@ fn print_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Objec
         return Err("No args given to print".to_string());
     }
 
-    for arg in args {
-        match arg {
-            Object::Integer(n) => println!("{}", n),
-            Object::String(s) => println!("{}", s),
-            Object::Bool(b) => println!("{}", b),
-            Object::DataList(_) => println!("{}", arg.to_string()),
-            Object::Symbol(s) => println!("{}", eval_symbol(&s, env)?),
+    for arg in &args {
+        let output = match arg {
+            Object::Integer(n) => n.to_string(),
+            Object::String(s) => s.clone(),
+            Object::Bool(b) => b.to_string(),
+            Object::DataList(_) => arg.to_string(),
+            Object::Symbol(s) => eval_symbol(&s, env)?.to_string(),
             _ => return Err("Cannot print this type".to_string()),
-        }
+        };
+        
+        // Write to stdout for interactive use
+        println!("{}", output);
+        
+        env.borrow_mut().add_output(output);
     }
 
-    Ok(Object::Void())
+    // In Common Lisp, print returns the value it printed
+    Ok(args.last().unwrap().clone())
 }
 
 fn not_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
