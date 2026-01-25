@@ -1,6 +1,3 @@
-; ===========================
-; NESTED CONDITIONALS
-; ===========================
 ; Check if a number is between 1 and 10
 (defun check-range (n)
   (cond

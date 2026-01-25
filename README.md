@@ -33,7 +33,7 @@ https://rextester.com/l/common_lisp_online_compiler
 (fact 5)
 ```
 
-### Goal 3
+### Goal 3 - DONE
 ```lisp
 (setq my-list '(1 2 3 4 5))
 (first my-list)   ;; 1
@@ -50,10 +50,3 @@ https://rextester.com/l/common_lisp_online_compiler
   (let ((user-input (read-line)))
     (print (+ "You entered:" user-input))))
 ```
-
-### TODO
-- [ ] `lists`
-- [ ] `format`
-- [ ] `read-line`
-- [ ] `concatenate` (now + works for strings, it should not)
-- [ ] `format`

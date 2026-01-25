@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::builtins::{self, get_builtin_function};
+use crate::special_form::*;
 use crate::{env::Env, parser::Object};
 
 pub fn eval(object: Object, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
@@ -57,12 +58,12 @@ fn eval_list(list: &Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, S
     // Check for special forms
     if let Object::Symbol(ref s) = func {
         match s.as_str() {
-            "let" => return builtins::let_function(args.to_vec(), env),
-            "defun" => return builtins::defun_function(args.to_vec(), env),
-            "dotimes" => return builtins::dotimes_function(args.to_vec(), env),
-            "cond" => return builtins::cond_function(args.to_vec(), env),
-            "setq" => return builtins::setq_function(args.to_vec(), env),
-            "if" => return builtins::if_function(args.to_vec(), env),
+            "let" => return let_function(args.to_vec(), env),
+            "defun" => return defun_function(args.to_vec(), env),
+            "dotimes" => return dotimes_function(args.to_vec(), env),
+            "cond" => return cond_function(args.to_vec(), env),
+            "setq" => return setq_function(args.to_vec(), env),
+            "if" => return if_function(args.to_vec(), env),
             "push" => return builtins::push_function(args.to_vec(), env),
             _ => {}
         }
