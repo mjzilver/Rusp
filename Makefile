@@ -7,10 +7,10 @@ run:
 	cargo run
 
 test:
-	RUSTFLAGS='--cfg test' cargo test --lib
+	cargo test --lib
 
 integration-test:
-	RUSTFLAGS='--cfg test' cargo test --test integration_tests
+	RUSTFLAGS='--cfg test' cargo test --test integration_tests --features test-helpers
 
 clean:
 	cargo clean

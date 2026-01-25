@@ -173,7 +173,7 @@ fn print_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Objec
         println!("{}", output);
         
         // In test mode, also capture output in the environment
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-helpers"))]
         env.borrow_mut().add_output(output);
     }
 
