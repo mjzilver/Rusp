@@ -134,7 +134,6 @@ mod tests {
 
     #[test]
     fn test_eval_addition() {
-        // Arrange
         let mut env = Rc::new(RefCell::new(Env::new()));
         let input = Object::List(vec![
             Object::Symbol("+".to_string()),
@@ -142,10 +141,8 @@ mod tests {
             Object::Integer(2),
         ]);
 
-        // Act
         let result = eval(input, &mut env);
-
-        // Assert
+        
         let expected = Ok(Object::Integer(3));
         assert_eq!(result, expected);
     }

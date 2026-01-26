@@ -8,7 +8,6 @@ mod tests {
     fn test_handle_arithmetic() {
         env::set_var("DEBUG_MODE", "1");
 
-        // Arrange
         let mut env = Rc::new(RefCell::new(Env::new()));
         let test_cases = vec![
             // Addition
@@ -34,10 +33,8 @@ mod tests {
         ];
 
         for (input, expected_output) in test_cases {
-            // Act
             let result = handle_input(input, &mut env);
 
-            // Assert
             assert_eq!(result, expected_output, "Failed for input: {}", input);
         }
     }
@@ -46,7 +43,6 @@ mod tests {
     fn test_handle_comparisons() {
         env::set_var("DEBUG_MODE", "1");
 
-        // Arrange
         let mut env = Rc::new(RefCell::new(Env::new()));
         let test_cases = vec![
             // Equality
@@ -65,10 +61,8 @@ mod tests {
         ];
 
         for (input, expected_output) in test_cases {
-            // Act
             let result = handle_input(input, &mut env);
 
-            // Assert
             assert_eq!(result, expected_output, "Failed for input: {}", input);
         }
     }
@@ -77,7 +71,6 @@ mod tests {
     fn test_handle_two_char_comparisons() {
         env::set_var("DEBUG_MODE", "1");
 
-        // Arrange
         let mut env = Rc::new(RefCell::new(Env::new()));
         let test_cases = vec![
             // Inequality
@@ -94,10 +87,8 @@ mod tests {
         ];
 
         for (input, expected_output) in test_cases {
-            // Act
             let result = handle_input(input, &mut env);
 
-            // Assert
             assert_eq!(result, expected_output, "Failed for input: {}", input);
         }
     }
@@ -106,7 +97,6 @@ mod tests {
     fn test_handle_if() {
         env::set_var("DEBUG_MODE", "1");
 
-        // Arrange
         let mut env = Rc::new(RefCell::new(Env::new()));
         let test_cases = vec![
             ("(if (> 5 3) 1 0)", "1"),
@@ -116,10 +106,8 @@ mod tests {
         ];
 
         for (input, expected_output) in test_cases {
-            // Act
             let result = handle_input(input, &mut env);
 
-            // Assert
             assert_eq!(result, expected_output, "Failed for input: {}", input);
         }
     }
@@ -128,7 +116,6 @@ mod tests {
     fn test_handle_defun() {
         env::set_var("DEBUG_MODE", "1");
 
-        // Arrange
         let mut env = Rc::new(RefCell::new(Env::new()));
         let test_cases = vec![
             (
@@ -152,10 +139,8 @@ mod tests {
         ];
 
         for (input, expected_output) in test_cases {
-            // Act
             let result = handle_input(input, &mut env);
 
-            // Assert
             assert_eq!(result, expected_output, "Failed for input: {}", input);
         }
     }
@@ -164,9 +149,8 @@ mod tests {
     fn test_fizzbuzz() {
         env::set_var("DEBUG_MODE", "1");
 
-        // Arrange
         let mut env = Rc::new(RefCell::new(Env::new()));
-        
+
         let input = r#"
             (defun fizzbuzz (n)
             (dotimes (i n)
@@ -179,18 +163,16 @@ mod tests {
 
             (fizzbuzz 15)
         "#;
-        
-        // Act
+
         handle_input(input, &mut env);
         let output = env.borrow().get_output();
-        
+
         let expected_lines = vec![
-            "1", "2", "Fizz", "4", "Buzz", "Fizz", "7", "8", "Fizz", "Buzz",
-            "11", "Fizz", "13", "14", "FizzBuzz"
+            "1", "2", "Fizz", "4", "Buzz", "Fizz", "7", "8", "Fizz", "Buzz", "11", "Fizz", "13",
+            "14", "FizzBuzz",
         ];
         let expected_output = expected_lines.join("\n");
 
-        // Assert
         assert_eq!(output, expected_output, "FizzBuzz output doesn't match");
     }
 
@@ -198,7 +180,6 @@ mod tests {
     fn test_recursion() {
         env::set_var("DEBUG_MODE", "1");
 
-        // Arrange
         let mut env = Rc::new(RefCell::new(Env::new()));
         let test_cases = vec![(
             r#"
@@ -212,10 +193,8 @@ mod tests {
         )];
 
         for (input, expected_output) in test_cases {
-            // Act
             let result = handle_input(input, &mut env);
 
-            // Assert
             assert_eq!(result, expected_output, "Failed for input: {}", input);
         }
     }
@@ -224,7 +203,6 @@ mod tests {
     fn test_handle_datalist() {
         env::set_var("DEBUG_MODE", "1");
 
-        // Arrange
         let mut env = Rc::new(RefCell::new(Env::new()));
         let test_cases = vec![
             ("(setq a '(1 2 3))", "(1 2 3)"),
@@ -232,10 +210,8 @@ mod tests {
         ];
 
         for (input, expected_output) in test_cases {
-            // Act
             let result = handle_input(input, &mut env);
 
-            // Assert
             assert_eq!(result, expected_output, "Failed for input: {}", input);
         }
     }
