@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::lexer::Token;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Object {
     Integer(i64),
     String(String),

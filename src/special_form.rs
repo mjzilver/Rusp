@@ -1,83 +1,86 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::{env::Env, eval::eval, parser::Object};
+use crate::{args::Args, env::Env, eval::eval, parser::Object};
 
 pub fn if_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    if args.len() < 2 || args.len() > 3 {
+    let args = Args::new(&args);
+
+    if args.args.len() < 2 || args.args.len() > 3 {
         return Err("Incorrect number of arguments for if".to_string());
     }
 
-    let condition = eval(args[0].clone(), env)?;
+    let condition = eval(args.get(0)?.clone(), env)?;
 
-    let is_truthy = match condition {
-        Object::Bool(false) => false,
-        Object::Void() => false,
-        _ => true,
-    };
-
-    if is_truthy {
-        return Ok(eval(args[1].clone(), env)?);
-    } else if args.len() == 3 {
-        return Ok(eval(args[2].clone(), env)?);
+    if is_truthy(&condition) {
+        return eval(args.get(1)?.clone(), env);
     }
 
-    Ok(Object::Void())
+    match args.args.get(2) {
+        Some(else_branch) => eval(else_branch.clone(), env),
+        None => Ok(Object::Void()),
+    }
+}
+
+fn is_truthy(object: &Object) -> bool {
+    !matches!(object, Object::Bool(false) | Object::Void())
 }
 
 pub fn dotimes_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    if args.len() != 2 {
-        return Err("dotimes expects 2 arguments".to_string());
-    }
+    let args = Args::new(&args);
+    args.exactly(2, "dotimes")?;
 
-    let loop_args = match &args[0] {
-        Object::List(list) => list,
-        _ => return Err("dotimes first argument should be a list".to_string()),
-    };
+    let loop_args = args.list(0, "dotimes first argument should be a list")?;
 
     if loop_args.len() != 2 {
         return Err("dotimes loop variable and limit expected".to_string());
     }
 
     let loop_var = match &loop_args[0] {
-        Object::Symbol(s) => s,
+        Object::Symbol(symbol) => symbol,
         _ => return Err("First item in dotimes must be a symbol".to_string()),
     };
 
-    let limit = match &eval(loop_args[1].clone(), env)? {
-        Object::Integer(i) => *i,
+    let limit = match eval(loop_args[1].clone(), env)? {
+        Object::Integer(value) => value,
         _ => return Err("Limit in dotimes must evaluate to an integer".to_string()),
     };
 
-    let body = &args[1];
+    let body = args.get(1)?.clone();
 
     for i in 0..limit {
         let mut local_env = env.clone();
+
         local_env
             .borrow_mut()
             .set(loop_var.clone(), Object::Integer(i));
 
-        let result = eval(body.clone(), &mut local_env);
-        if result.is_err() {
-            return result;
-        }
+        eval(body.clone(), &mut local_env)?;
     }
 
     Ok(Object::Void())
 }
 
 pub fn cond_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    for clause in &args {
-        match clause {
-            Object::List(pair) if pair.len() == 2 => {
-                let condition = eval(pair[0].clone(), env)?;
+    for clause in args {
+        let clause = match clause {
+            Object::List(clause) => clause,
+            _ => return Err("Invalid cond clause".to_string()),
+        };
 
-                if condition == Object::Bool(true) {
-                    return eval(pair[1].clone(), env);
+        match clause.as_slice() {
+            [condition, body] => {
+                let condition = eval(condition.clone(), env)?;
+
+                if is_truthy(&condition) {
+                    return eval(body.clone(), env);
                 }
             }
-            Object::List(pair) if pair.len() == 1 => {
-                return eval(pair[0].clone(), env);
+
+            [body] => {
+                // A single-element clause is the default clause.
+                return eval(body.clone(), env);
             }
+
             _ => return Err("Invalid cond clause".to_string()),
         }
     }
@@ -86,81 +89,71 @@ pub fn cond_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Ob
 }
 
 pub fn defun_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    if args.len() < 3 {
-        return Err(format!(
-            "Incorrect number of arguments for defun want at least 3 got={}",
-            args.len()
-        ));
-    }
+    let args = Args::new(&args);
+    args.at_least(3, "defun")?;
 
-    if let Object::Symbol(ref name) = &args[0] {
-        let params = match &args[1] {
-            Object::List(list) => list.clone(),
-            _ => return Err("Second argument to defun must be a list of parameters".to_string()),
-        };
+    let name = args.symbol(0, "First argument to defun must be a symbol")?;
 
-        let body: Vec<Object> = args[2..].to_vec();
+    let params = args
+        .list(1, "Second argument to defun must be a list of parameters")?
+        .clone();
 
-        env.borrow_mut().set(
-            name.clone(),
-            Object::Function {
-                name: name.to_string(),
-                params,
-                body,
-            },
-        );
+    let body = args.args[2..].to_vec();
 
-        Ok(Object::Void())
-    } else {
-        Err("First argument to defun must be a symbol".to_string())
-    }
+    env.borrow_mut().set(
+        name.to_string(),
+        Object::Function {
+            name: name.to_string(),
+            params,
+            body,
+        },
+    );
+
+    Ok(Object::Void())
 }
 
 pub fn let_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    if args.len() != 2 {
-        return Err("Incorrect number of arguments for let".to_string());
-    }
+    let args = Args::new(&args);
+    args.exactly(2, "let")?;
 
-    let bindings = &args[0];
-    let body = &args[1];
+    let bindings = args.list(0, "First argument to let must be a list of bindings")?;
 
-    if let Object::List(ref bindings_list) = bindings {
-        let mut local_env = env.clone();
+    let body = args.get(1)?.clone();
 
-        for binding in bindings_list {
-            if let Object::List(ref pair) = binding {
-                if pair.len() != 2 {
-                    return Err("Each binding must be a list of two elements".to_string());
-                }
+    let mut local_env = env.clone();
 
-                let var = &pair[0];
-                let value = eval(pair[1].clone(), &mut local_env)?;
-                if let Object::Symbol(ref var_name) = var {
-                    local_env.borrow_mut().set(var_name.clone(), value);
-                } else {
-                    return Err("Binding variable must be a symbol".to_string());
-                }
-            } else {
-                return Err("Each binding must be a list".to_string());
-            }
+    for binding in bindings {
+        let pair = match binding {
+            Object::List(pair) => pair,
+            _ => return Err("Each binding must be a list".to_string()),
+        };
+
+        if pair.len() != 2 {
+            return Err("Each binding must be a list of two elements".to_string());
         }
 
-        eval(body.clone(), &mut local_env)
-    } else {
-        Err("First argument to let must be a list of bindings".to_string())
+        let var_name = match &pair[0] {
+            Object::Symbol(name) => name,
+            _ => return Err("Binding variable must be a symbol".to_string()),
+        };
+
+        let value = eval(pair[1].clone(), &mut local_env)?;
+
+        local_env.borrow_mut().set(var_name.clone(), value);
     }
+
+    eval(body, &mut local_env)
 }
 
 pub fn setq_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    if args.len() != 2 {
-        return Err("Incorrect number of arguments for setq".to_string());
-    }
+    let args = Args::new(&args);
+    args.exactly(2, "setq")?;
 
-    if let Object::Symbol(ref name) = args[0] {
-        let value = eval(args[1].clone(), env)?;
-        env.borrow_mut().set(name.clone(), value.clone());
-        Ok(value)
-    } else {
-        Err("First argument to let must be a symbol".to_string())
-    }
+    let name = args.symbol(0, "First argument to setq must be a symbol")?;
+
+    let value = eval(args.get(1)?.clone(), env)?;
+
+    env.borrow_mut().set(name.to_string(), value.clone());
+
+    Ok(value)
 }

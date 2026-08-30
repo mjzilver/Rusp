@@ -1,6 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{
+    args::Args,
     env::Env,
     eval::{eval, eval_symbol},
     parser::Object,
@@ -12,20 +13,23 @@ pub type BuiltInFunction = fn(Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result
 pub fn get_builtin_function(name: &str) -> Option<BuiltInFunction> {
     match name {
         // Arithmetic
-        "+" => Some(add_function),
-        "-" => Some(minus_function),
-        "*" => Some(multiply_function),
-        "/" => Some(divide_function),
+        "+" => Some(|args, env| arithmetic_function(args, env, |a, b| a + b)),
+        "-" => Some(|args, env| arithmetic_function(args, env, |a, b| a - b)),
+        "*" => Some(|args, env| arithmetic_function(args, env, |a, b| a * b)),
+        "/" => Some(|args, env| arithmetic_function(args, env, |a, b| a / b)),
         "mod" => Some(mod_function),
+
+        // String
+        "concat" => Some(concat_function),
 
         // Comparison
         "not" => Some(not_function),
-        "=" => Some(|args, _| compare_objects(args, equals)),
+        "=" => Some(|args, _| compare_objects(args, |a, b| a == b)),
         "/=" => Some(not_equals_all),
-        ">" => Some(|args, _| compare_objects(args, greater_than)),
-        "<" => Some(|args, _| compare_objects(args, lesser_than)),
-        ">=" => Some(|args, _| compare_objects(args, greater_than_or_equals)),
-        "<=" => Some(|args, _| compare_objects(args, lesser_than_or_equals)),
+        ">" => Some(|args, _| compare_objects(args, |a, b| a > b)),
+        "<" => Some(|args, _| compare_objects(args, |a, b| a < b)),
+        ">=" => Some(|args, _| compare_objects(args, |a, b| a >= b)),
+        "<=" => Some(|args, _| compare_objects(args, |a, b| a <= b)),
         "zerop" => Some(zerop_function),
         "and" => Some(and_function),
 
@@ -49,109 +53,208 @@ pub fn get_builtin_function(name: &str) -> Option<BuiltInFunction> {
 
         // IO
         "print" => Some(print_function),
+
         _ => None,
     }
 }
 
-fn add_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    if let Some(Object::Integer(_)) = args.get(0) {
-        let mut sum = 0;
-
-        for arg in args {
-            match arg {
-                Object::Integer(n) => sum += n,
-                _ => return Err(format!("Cannot add {} to integer", arg)),
-            }
-        }
-
-        Ok(Object::Integer(sum))
-    } else if let Some(Object::String(_)) = args.get(0) {
-        let mut string = String::new();
-
-        for arg in args {
-            match arg {
-                Object::String(s) => string += &s.to_string(),
-                _ => return Err(format!("Cannot add {} to string", arg)),
-            }
-        }
-
-        Ok(Object::String(string))
-    } else {
-        return Err(format!("Cannot add to {}", args.get(0).unwrap()));
+fn integer_from_object(object: &Object, name: &str) -> Result<i64, String> {
+    match object {
+        Object::Integer(value) => Ok(*value),
+        _ => Err(format!("{name} must be an integer")),
     }
 }
 
-fn minus_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    if let Some(Object::Integer(first_value)) = args.get(0) {
-        let mut result = *first_value;
+fn arithmetic_function(
+    args: Vec<Object>,
+    _env: &mut Rc<RefCell<Env>>,
+    operator: fn(i64, i64) -> i64,
+) -> Result<Object, String> {
+    let (first, rest) = args
+        .split_first()
+        .ok_or_else(|| "First argument must be an integer".to_string())?;
 
-        for arg in &args[1..] {
-            match arg {
-                Object::Integer(n) => result -= n,
-                _ => return Err("Cannot use - with non-integer values".to_string()),
-            }
-        }
+    let mut result = integer_from_object(first, "First argument")?;
 
-        Ok(Object::Integer(result))
-    } else {
-        Err("First argument must be an integer".to_string())
+    for arg in rest {
+        result = operator(result, integer_from_object(arg, "Argument")?);
     }
-}
 
-fn multiply_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    if let Some(Object::Integer(first_value)) = args.get(0) {
-        let mut result = *first_value;
-
-        for arg in &args[1..] {
-            match arg {
-                Object::Integer(n) => result *= n,
-                _ => return Err("Cannot use * with non-integer values".to_string()),
-            }
-        }
-
-        Ok(Object::Integer(result))
-    } else {
-        Err("First argument must be an integer".to_string())
-    }
-}
-
-fn divide_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    if let Some(Object::Integer(first_value)) = args.get(0) {
-        let mut result = *first_value;
-
-        for arg in &args[1..] {
-            match arg {
-                Object::Integer(n) => result /= n,
-                _ => return Err("Cannot use / with non-integer values".to_string()),
-            }
-        }
-
-        Ok(Object::Integer(result))
-    } else {
-        Err("First argument must be an integer".to_string())
-    }
+    Ok(Object::Integer(result))
 }
 
 fn mod_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    if args.len() != 2 {
-        return Err("Incorrect number of arguments for mod".to_string());
-    }
+    let args = Args::new(&args);
+    args.exactly(2, "mod")?;
 
-    let a = match &args[0] {
-        Object::Integer(n) => *n,
-        _ => return Err("First argument to mod must be an integer".to_string()),
-    };
-
-    let b = match &args[1] {
-        Object::Integer(n) => *n,
-        _ => return Err("Second argument to mod must be an integer".to_string()),
-    };
+    let a = args.integer(0, "First argument to mod")?;
+    let b = args.integer(1, "Second argument to mod")?;
 
     if b == 0 {
         return Err("Division by zero in mod".to_string());
     }
 
     Ok(Object::Integer(a % b))
+}
+
+fn concat_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
+    let mut result = String::new();
+
+    for arg in args {
+        match arg {
+            Object::String(value) => result.push_str(&value),
+            _ => return Err("Cannot concatenate non-string values".to_string()),
+        }
+    }
+
+    Ok(Object::String(result))
+}
+
+type CompareFn = fn(&Object, &Object) -> bool;
+
+fn compare_objects(args: Vec<Object>, comparison: CompareFn) -> Result<Object, String> {
+    let args = Args::new(&args);
+    args.at_least(2, "Require at least 2 items to compare")?;
+
+    for pair in args.args.windows(2) {
+        let left = &pair[0];
+        let right = &pair[1];
+
+        if !same_comparable_type(left, right) {
+            return Err("Unsupported comparison between different types".to_string());
+        }
+
+        if !comparison(left, right) {
+            return Ok(Object::Bool(false));
+        }
+    }
+
+    Ok(Object::Bool(true))
+}
+
+fn same_comparable_type(left: &Object, right: &Object) -> bool {
+    matches!(
+        (left, right),
+        (Object::Bool(_), Object::Bool(_))
+            | (Object::Integer(_), Object::Integer(_))
+            | (Object::String(_), Object::String(_))
+    )
+}
+
+fn equals(left: &Object, right: &Object) -> bool {
+    match (left, right) {
+        (Object::Bool(a), Object::Bool(b)) => a == b,
+        (Object::Integer(a), Object::Integer(b)) => a == b,
+        (Object::String(a), Object::String(b)) => a == b,
+        _ => false,
+    }
+}
+
+fn not_equals_all(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
+    let args = Args::new(&args);
+    args.at_least(2, "Require at least 2 items to compare")?;
+
+    for (i, left) in args.args.iter().enumerate() {
+        for right in &args.args[i + 1..] {
+            if equals(left, right) {
+                return Ok(Object::Bool(false));
+            }
+        }
+    }
+
+    Ok(Object::Bool(true))
+}
+
+fn not_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
+    let args = Args::new(&args);
+    args.exactly(1, "not")?;
+
+    Ok(Object::Bool(!args.bool(0, "Argument to not")?))
+}
+
+fn zerop_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
+    let args = Args::new(&args);
+    args.exactly(1, "zerop")?;
+
+    Ok(Object::Bool(args.integer(0, "Argument to zerop")? == 0))
+}
+
+fn and_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
+    for arg in args {
+        let mut child_env = Rc::new(RefCell::new(Env::new_child(env.clone())));
+        let result = eval(arg, &mut child_env)?;
+
+        if matches!(result, Object::Bool(false)) {
+            return Ok(Object::Bool(false));
+        }
+    }
+
+    Ok(Object::Bool(true))
+}
+
+pub fn push_function(mut args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
+    let validated = Args::new(&args);
+    validated.exactly(2, "push")?;
+
+    let value = match args.remove(0) {
+        Object::Symbol(_) => eval(args[0].clone(), env)?,
+        value
+        @ (Object::Integer(_) | Object::String(_) | Object::Bool(_) | Object::DataList(_)) => value,
+        _ => return Err("Cannot add this to list".to_string()),
+    };
+
+    let symbol = match &args[0] {
+        Object::Symbol(symbol) => symbol,
+        _ => return Err("Second argument must be a symbol referring to a DataList".to_string()),
+    };
+
+    let mut list = match env.borrow().get(symbol) {
+        Some(Object::DataList(list)) => list,
+        _ => return Err("The symbol does not refer to a valid DataList".to_string()),
+    };
+
+    list.insert(0, value);
+
+    let result = Object::DataList(list);
+
+    env.borrow_mut().set(symbol.to_string(), result.clone());
+
+    Ok(result)
+}
+
+fn reverse_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
+    let args = Args::new(&args);
+    args.exactly(1, "reverse")?;
+
+    let mut list = args.list(0, "reverse")?.clone();
+    list.reverse();
+
+    Ok(Object::DataList(list))
+}
+
+fn nth_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
+    let args = Args::new(&args);
+    args.exactly(2, "nth")?;
+
+    let index = args.integer(0, "Index")?;
+
+    let index = usize::try_from(index).map_err(|_| "Index must be non-negative".to_string())?;
+
+    index_list_function(vec![args.get(1)?.clone()], env, index)
+}
+
+fn index_list_function(
+    args: Vec<Object>,
+    _env: &mut Rc<RefCell<Env>>,
+    index: usize,
+) -> Result<Object, String> {
+    let args = Args::new(&args);
+    args.exactly(1, "index list")?;
+
+    args.list(0, "index list")?
+        .get(index)
+        .cloned()
+        .ok_or_else(|| "Index out of bounds".to_string())
 }
 
 fn print_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
@@ -161,225 +264,19 @@ fn print_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Objec
 
     for arg in &args {
         let output = match arg {
-            Object::Integer(n) => n.to_string(),
-            Object::String(s) => s.clone(),
-            Object::Bool(b) => b.to_string(),
+            Object::Integer(value) => value.to_string(),
+            Object::String(value) => value.clone(),
+            Object::Bool(value) => value.to_string(),
             Object::DataList(_) => arg.to_string(),
-            Object::Symbol(s) => eval_symbol(&s, env)?.to_string(),
+            Object::Symbol(symbol) => eval_symbol(symbol, env)?.to_string(),
             _ => return Err("Cannot print this type".to_string()),
         };
-        
-        // Write to stdout for interactive use
-        println!("{}", output);
-        
-        // In test mode, also capture output in the environment
+
+        println!("{output}");
+
         #[cfg(any(test, feature = "test-helpers"))]
         env.borrow_mut().add_output(output);
     }
 
-    // In Common Lisp, print returns the value it printed
     Ok(args.last().unwrap().clone())
-}
-
-fn not_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    if args.len() != 1 {
-        return Err("Incorrect number of arguments for not".to_string());
-    }
-
-    if let Object::Bool(ref bool) = args[0] {
-        Ok(Object::Bool(!bool))
-    } else {
-        Err("Argument to not must be a bool".to_string())
-    }
-}
-
-type CompareFn = fn(&Object, &Object) -> bool;
-
-fn compare_objects(args: Vec<Object>, comparison: CompareFn) -> Result<Object, String> {
-    if args.len() < 2 {
-        return Err("Require at least 2 items to compare".to_string());
-    }
-
-    for i in 0..(args.len() - 1) {
-        let item1 = &args[i];
-        let item2 = &args[i + 1];
-
-        match (item1, item2) {
-            (Object::Bool(bool1), Object::Bool(bool2)) => {
-                if !comparison(&Object::Bool(*bool1), &Object::Bool(*bool2)) {
-                    return Ok(Object::Bool(false));
-                }
-            }
-            (Object::Integer(int1), Object::Integer(int2)) => {
-                if !comparison(&Object::Integer(*int1), &Object::Integer(*int2)) {
-                    return Ok(Object::Bool(false));
-                }
-            }
-            _ => {
-                return Err("Unsupported comparison between different types".to_string());
-            }
-        }
-    }
-
-    Ok(Object::Bool(true))
-}
-
-fn greater_than(item1: &Object, item2: &Object) -> bool {
-    match (item1, item2) {
-        (Object::Bool(bool1), Object::Bool(bool2)) => bool1 > bool2,
-        (Object::Integer(int1), Object::Integer(int2)) => int1 > int2,
-        _ => false,
-    }
-}
-
-fn lesser_than(item1: &Object, item2: &Object) -> bool {
-    match (item1, item2) {
-        (Object::Bool(bool1), Object::Bool(bool2)) => bool1 < bool2,
-        (Object::Integer(int1), Object::Integer(int2)) => int1 < int2,
-        _ => false,
-    }
-}
-
-fn greater_than_or_equals(item1: &Object, item2: &Object) -> bool {
-    match (item1, item2) {
-        (Object::Bool(bool1), Object::Bool(bool2)) => bool1 >= bool2,
-        (Object::Integer(int1), Object::Integer(int2)) => int1 >= int2,
-        _ => false,
-    }
-}
-
-fn lesser_than_or_equals(item1: &Object, item2: &Object) -> bool {
-    match (item1, item2) {
-        (Object::Bool(bool1), Object::Bool(bool2)) => bool1 <= bool2,
-        (Object::Integer(int1), Object::Integer(int2)) => int1 <= int2,
-        _ => false,
-    }
-}
-
-fn equals(item1: &Object, item2: &Object) -> bool {
-    match (item1, item2) {
-        (Object::Bool(bool1), Object::Bool(bool2)) => bool1 == bool2,
-        (Object::Integer(int1), Object::Integer(int2)) => int1 == int2,
-        (Object::String(str1), Object::String(str2)) => str1 == str2,
-        _ => false,
-    }
-}
-
-fn not_equals_all(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    if args.len() < 2 {
-        return Err("Require at least 2 items to compare".to_string());
-    }
-
-    for i in 0..args.len() {
-        for j in (i + 1)..args.len() {
-            if equals(&args[i], &args[j]) {
-                return Ok(Object::Bool(false));
-            }
-        }
-    }
-
-    Ok(Object::Bool(true))
-}
-
-fn zerop_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    if args.len() != 1 {
-        return Err("Incorrect number of arguments for zerop".to_string());
-    }
-
-    match &args[0] {
-        Object::Integer(n) => Ok(Object::Bool(*n == 0)),
-        _ => Err("Argument to zerop must be an integer".to_string()),
-    }
-}
-
-fn and_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    for arg in args {
-        let mut child_env = Rc::new(RefCell::new(Env::new_child(env.clone())));
-        let result = eval(arg, &mut child_env)?;
-        if let Object::Bool(false) = result {
-            return Ok(Object::Bool(false));
-        }
-    }
-
-    Ok(Object::Bool(true))
-}
-
-pub fn push_function(mut args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    if args.len() != 2 {
-        return Err("Incorrect number of arguments for push".to_string());
-    }
-
-    let obj = match &args[0] {
-        Object::Symbol(_) => eval(args.remove(0), env)?,
-        Object::Integer(_) | Object::String(_) | Object::Bool(_) => args.remove(0),
-        _ => return Err("Cannot add this to list".to_string()),
-    };
-
-    let symbol = match &args[0] {
-        Object::Symbol(s) => s,
-        _ => return Err("Second argument must be a symbol referring to a DataList".to_string()),
-    };
-
-    let mut data_list = match env.borrow_mut().get(symbol) {
-        Some(Object::DataList(list)) => list,
-        _ => return Err("The symbol does not refer to a valid DataList".to_string()),
-    };
-
-    data_list.insert(0, obj);
-
-    env.borrow_mut()
-        .set(symbol.to_string(), Object::DataList(data_list));
-
-    Ok(env.borrow_mut().get(symbol).unwrap())
-}
-
-fn reverse_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    if args.len() != 1 {
-        return Err("Incorrect number of arguments for reverse".to_string());
-    }
-
-    let list = match &args[0] {
-        Object::DataList(list) => list,
-        _ => return Err("Argument must be a DataList".to_string()),
-    };
-    let mut reversed_list = list.clone();
-    reversed_list.reverse();
-
-    Ok(Object::DataList(reversed_list))
-}
-
-fn nth_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    if args.len() != 2 {
-        return Err("Incorrect number of arguments for nth".to_string());
-    }
-
-    let i = match &args[0] {
-        Object::Integer(i) => {
-            usize::try_from(*i).map_err(|_| "Index must be non-negative".to_string())?
-        }
-        _ => return Err("Second argument must be an integer".to_string()),
-    };
-
-    index_list_function(args[1..].to_vec(), env, i)
-}
-
-fn index_list_function(
-    args: Vec<Object>,
-    _env: &mut Rc<RefCell<Env>>,
-    i: usize,
-) -> Result<Object, String> {
-    if args.len() != 1 {
-        return Err("Incorrect number of arguments to index list".to_string());
-    }
-
-    let list = match &args[0] {
-        Object::DataList(list) => list,
-        _ => return Err("Argument must be a DataList".to_string()),
-    };
-
-    if i < list.len().try_into().unwrap() {
-        Ok(list[i].clone())
-    } else {
-        Err("Index out of bounds".to_string())
-    }
 }

@@ -142,7 +142,7 @@ mod tests {
         ]);
 
         let result = eval(input, &mut env);
-        
+
         let expected = Ok(Object::Integer(3));
         assert_eq!(result, expected);
     }

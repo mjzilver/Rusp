@@ -1,3 +1,4 @@
+mod args;
 mod builtins;
 mod eval;
 mod lexer;
