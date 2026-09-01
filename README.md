@@ -1,52 +1,11 @@
-# Simple Rust LISP Interpreter
+# Rusp: Modern Clojure-Style Lisp Interpreter in Rust
 
-This project is a simple LISP interpreter written in Rust, inspired by "Writing an Interpreter in Go."
+A lightweight Lisp interpreter written in Rust featuring modern Clojure-inspired syntax, lexical closures, vector literals, typed runtime values, line/column diagnostic error reporting, and an easily extendable builtin system.
 
-It is purely for my own educational purposes.
+## Syntax & Features
 
-## Lisp Spec
-http://clhs.lisp.se/Front/index.htm
-
-https://rextester.com/l/common_lisp_online_compiler 
-
-## My goals
-### Goal 1 - DONE
-```lisp
-(defun fizzbuzz (n)
-  (dotimes (i n)
-    (let ((num (+ i 1)))
-      (cond
-        ((and (zerop (mod num 3)) (zerop (mod num 5))) (print "FizzBuzz"))
-        ((zerop (mod num 3)) (print "Fizz"))
-        ((zerop (mod num 5)) (print "Buzz"))
-        (T (print num))))))
-
-(fizzbuzz 30)
-```
-### Goal 2 - DONE
-```lisp
-(defun fact (n)
-  (if (zerop n)
-      1
-      (* n (fact (- n 1)))))
-
-(fact 5)
-```
-
-### Goal 3 - DONE
-```lisp
-(setq my-list '(1 2 3 4 5))
-(first my-list)   ;; 1
-(nth 2 my-list)   ;; 3
-(push 0 my-list)  ;;  (0 1 2 3 4 5)
-(setq my-list (append my-list '(6)))  ;;  (0 1 2 3 4 5 6)
-(print my-list)
-```
-
-### Goal 4
-```lisp
-(defun ask-for-input ()
-  (print "Please enter some input: ")
-  (let ((user-input (read-line)))
-    (print (+ "You entered:" user-input))))
-```
+- **Forms**: `defn`, `def`, `fn`, `let [v e]`, `if`, `do`, `quote` (`'`)
+- **Data Types**: Integers (`42`), Floats (`3.14`), Booleans (`true`, `false`), `nil`, Strings (`"hello\nworld"`), Symbols (`foo`), Lists (`(1 2 3)`), Vectors (`[1 2 3]`)
+- **Lexical Closures**: Functions capture their definition-time scope
+- **Collections Operations**: `first`, `rest`, `second`, `third`, `nth`, `conj`, `push`, `reverse`, `count`
+- **Error Diagnostics**: Span-aware error messages with line and column numbers

@@ -1,282 +1,561 @@
+use std::io::{self, Write};
 use std::{cell::RefCell, rc::Rc};
 
-use crate::{
-    args::Args,
-    env::Env,
-    eval::{eval, eval_symbol},
-    parser::Object,
-    special_form::*,
-};
+use crate::{args::Args, env::Env, errors::EvalError, value::Value};
 
-pub type BuiltInFunction = fn(Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String>;
+pub type PrimitiveFunc = fn(Vec<Value>, &mut Rc<RefCell<Env>>) -> Result<Value, EvalError>;
 
-pub fn get_builtin_function(name: &str) -> Option<BuiltInFunction> {
+pub fn get_builtin_function(name: &str) -> Option<PrimitiveFunc> {
     match name {
         // Arithmetic
-        "+" => Some(|args, env| arithmetic_function(args, env, |a, b| a + b)),
-        "-" => Some(|args, env| arithmetic_function(args, env, |a, b| a - b)),
-        "*" => Some(|args, env| arithmetic_function(args, env, |a, b| a * b)),
-        "/" => Some(|args, env| arithmetic_function(args, env, |a, b| a / b)),
+        "+" => Some(add_function),
+        "-" => Some(sub_function),
+        "*" => Some(mul_function),
+        "/" => Some(div_function),
         "mod" => Some(mod_function),
 
         // String
         "concat" => Some(concat_function),
 
-        // Comparison
+        // Comparison & Logic
         "not" => Some(not_function),
-        "=" => Some(|args, _| compare_objects(args, |a, b| a == b)),
-        "/=" => Some(not_equals_all),
-        ">" => Some(|args, _| compare_objects(args, |a, b| a > b)),
-        "<" => Some(|args, _| compare_objects(args, |a, b| a < b)),
-        ">=" => Some(|args, _| compare_objects(args, |a, b| a >= b)),
-        "<=" => Some(|args, _| compare_objects(args, |a, b| a <= b)),
-        "zerop" => Some(zerop_function),
+        "=" => Some(eq_function),
+        "/=" => Some(neq_function),
+        ">" => Some(gt_function),
+        "<" => Some(lt_function),
+        ">=" => Some(gte_function),
+        "<=" => Some(lte_function),
+        "zero?" => Some(zeroq_function),
         "and" => Some(and_function),
+        "or" => Some(or_function),
 
-        // Variables
-        "let" => Some(let_function),
-        "defun" => Some(defun_function),
-        "setq" => Some(setq_function),
-
-        // Lists
-        "push" => Some(push_function),
-        "reverse" => Some(reverse_function),
-        "first" => Some(|args, env| index_list_function(args, env, 0)),
-        "second" => Some(|args, env| index_list_function(args, env, 1)),
-        "third" => Some(|args, env| index_list_function(args, env, 2)),
+        // Collections
+        "first" => Some(first_function),
+        "rest" => Some(rest_function),
+        "second" => Some(second_function),
+        "third" => Some(third_function),
         "nth" => Some(nth_function),
-
-        // Control flow
-        "if" => Some(if_function),
-        "dotimes" => Some(dotimes_function),
-        "cond" => Some(cond_function),
+        "push" | "conj" => Some(conj_function),
+        "reverse" => Some(reverse_function),
+        "count" => Some(count_function),
 
         // IO
         "print" => Some(print_function),
+        "read-line" => Some(read_line_function),
 
         _ => None,
     }
 }
 
-fn integer_from_object(object: &Object, name: &str) -> Result<i64, String> {
-    match object {
-        Object::Integer(value) => Ok(*value),
-        _ => Err(format!("{name} must be an integer")),
+enum Num {
+    Int(i64),
+    Float(f64),
+}
+
+fn to_num(val: &Value) -> Result<Num, EvalError> {
+    match val {
+        Value::Integer(i) => Ok(Num::Int(*i)),
+        Value::Float(f) => Ok(Num::Float(*f)),
+        v => Err(EvalError::TypeMismatch {
+            expected: "number".to_string(),
+            got: v.type_name().to_string(),
+            span: None,
+        }),
     }
 }
 
-fn arithmetic_function(
-    args: Vec<Object>,
-    _env: &mut Rc<RefCell<Env>>,
-    operator: fn(i64, i64) -> i64,
-) -> Result<Object, String> {
-    let (first, rest) = args
-        .split_first()
-        .ok_or_else(|| "First argument must be an integer".to_string())?;
-
-    let mut result = integer_from_object(first, "First argument")?;
-
-    for arg in rest {
-        result = operator(result, integer_from_object(arg, "Argument")?);
-    }
-
-    Ok(Object::Integer(result))
-}
-
-fn mod_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    let args = Args::new(&args);
-    args.exactly(2, "mod")?;
-
-    let a = args.integer(0, "First argument to mod")?;
-    let b = args.integer(1, "Second argument to mod")?;
-
-    if b == 0 {
-        return Err("Division by zero in mod".to_string());
-    }
-
-    Ok(Object::Integer(a % b))
-}
-
-fn concat_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    let mut result = String::new();
+fn add_function(args: Vec<Value>, _env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    let mut is_float = false;
+    let mut int_sum: i64 = 0;
+    let mut float_sum: f64 = 0.0;
 
     for arg in args {
-        match arg {
-            Object::String(value) => result.push_str(&value),
-            _ => return Err("Cannot concatenate non-string values".to_string()),
-        }
-    }
-
-    Ok(Object::String(result))
-}
-
-type CompareFn = fn(&Object, &Object) -> bool;
-
-fn compare_objects(args: Vec<Object>, comparison: CompareFn) -> Result<Object, String> {
-    let args = Args::new(&args);
-    args.at_least(2, "Require at least 2 items to compare")?;
-
-    for pair in args.args.windows(2) {
-        let left = &pair[0];
-        let right = &pair[1];
-
-        if !same_comparable_type(left, right) {
-            return Err("Unsupported comparison between different types".to_string());
-        }
-
-        if !comparison(left, right) {
-            return Ok(Object::Bool(false));
-        }
-    }
-
-    Ok(Object::Bool(true))
-}
-
-fn same_comparable_type(left: &Object, right: &Object) -> bool {
-    matches!(
-        (left, right),
-        (Object::Bool(_), Object::Bool(_))
-            | (Object::Integer(_), Object::Integer(_))
-            | (Object::String(_), Object::String(_))
-    )
-}
-
-fn equals(left: &Object, right: &Object) -> bool {
-    match (left, right) {
-        (Object::Bool(a), Object::Bool(b)) => a == b,
-        (Object::Integer(a), Object::Integer(b)) => a == b,
-        (Object::String(a), Object::String(b)) => a == b,
-        _ => false,
-    }
-}
-
-fn not_equals_all(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    let args = Args::new(&args);
-    args.at_least(2, "Require at least 2 items to compare")?;
-
-    for (i, left) in args.args.iter().enumerate() {
-        for right in &args.args[i + 1..] {
-            if equals(left, right) {
-                return Ok(Object::Bool(false));
+        match to_num(&arg)? {
+            Num::Int(i) => {
+                if is_float {
+                    float_sum += i as f64;
+                } else {
+                    int_sum += i;
+                }
+            }
+            Num::Float(f) => {
+                if !is_float {
+                    is_float = true;
+                    float_sum = int_sum as f64 + f;
+                } else {
+                    float_sum += f;
+                }
             }
         }
     }
 
-    Ok(Object::Bool(true))
+    if is_float {
+        Ok(Value::Float(float_sum))
+    } else {
+        Ok(Value::Integer(int_sum))
+    }
 }
 
-fn not_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    let args = Args::new(&args);
-    args.exactly(1, "not")?;
+fn sub_function(args: Vec<Value>, _env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    if args.is_empty() {
+        return Err(EvalError::ArityMismatch {
+            expected: "at least 1 argument".to_string(),
+            got: 0,
+            span: None,
+        });
+    }
 
-    Ok(Object::Bool(!args.bool(0, "Argument to not")?))
-}
+    if args.len() == 1 {
+        return match to_num(&args[0])? {
+            Num::Int(i) => Ok(Value::Integer(-i)),
+            Num::Float(f) => Ok(Value::Float(-f)),
+        };
+    }
 
-fn zerop_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    let args = Args::new(&args);
-    args.exactly(1, "zerop")?;
+    let first_num = to_num(&args[0])?;
+    let mut is_float = matches!(first_num, Num::Float(_));
+    let mut int_res = match first_num {
+        Num::Int(i) => i,
+        Num::Float(f) => f as i64,
+    };
+    let mut float_res = match first_num {
+        Num::Float(f) => f,
+        Num::Int(i) => i as f64,
+    };
 
-    Ok(Object::Bool(args.integer(0, "Argument to zerop")? == 0))
-}
-
-fn and_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    for arg in args {
-        let mut child_env = Rc::new(RefCell::new(Env::new_child(env.clone())));
-        let result = eval(arg, &mut child_env)?;
-
-        if matches!(result, Object::Bool(false)) {
-            return Ok(Object::Bool(false));
+    for arg in &args[1..] {
+        match to_num(arg)? {
+            Num::Int(i) => {
+                if is_float {
+                    float_res -= i as f64;
+                } else {
+                    int_res -= i;
+                }
+            }
+            Num::Float(f) => {
+                if !is_float {
+                    is_float = true;
+                    float_res = int_res as f64 - f;
+                } else {
+                    float_res -= f;
+                }
+            }
         }
     }
 
-    Ok(Object::Bool(true))
-}
-
-pub fn push_function(mut args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    let validated = Args::new(&args);
-    validated.exactly(2, "push")?;
-
-    let value = match args.remove(0) {
-        Object::Symbol(_) => eval(args[0].clone(), env)?,
-        value
-        @ (Object::Integer(_) | Object::String(_) | Object::Bool(_) | Object::DataList(_)) => value,
-        _ => return Err("Cannot add this to list".to_string()),
-    };
-
-    let symbol = match &args[0] {
-        Object::Symbol(symbol) => symbol,
-        _ => return Err("Second argument must be a symbol referring to a DataList".to_string()),
-    };
-
-    let mut list = match env.borrow().get(symbol) {
-        Some(Object::DataList(list)) => list,
-        _ => return Err("The symbol does not refer to a valid DataList".to_string()),
-    };
-
-    list.insert(0, value);
-
-    let result = Object::DataList(list);
-
-    env.borrow_mut().set(symbol.to_string(), result.clone());
-
-    Ok(result)
-}
-
-fn reverse_function(args: Vec<Object>, _env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    let args = Args::new(&args);
-    args.exactly(1, "reverse")?;
-
-    let mut list = args.list(0, "reverse")?.clone();
-    list.reverse();
-
-    Ok(Object::DataList(list))
-}
-
-fn nth_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    let args = Args::new(&args);
-    args.exactly(2, "nth")?;
-
-    let index = args.integer(0, "Index")?;
-
-    let index = usize::try_from(index).map_err(|_| "Index must be non-negative".to_string())?;
-
-    index_list_function(vec![args.get(1)?.clone()], env, index)
-}
-
-fn index_list_function(
-    args: Vec<Object>,
-    _env: &mut Rc<RefCell<Env>>,
-    index: usize,
-) -> Result<Object, String> {
-    let args = Args::new(&args);
-    args.exactly(1, "index list")?;
-
-    args.list(0, "index list")?
-        .get(index)
-        .cloned()
-        .ok_or_else(|| "Index out of bounds".to_string())
-}
-
-fn print_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    if args.is_empty() {
-        return Err("No args given to print".to_string());
+    if is_float {
+        Ok(Value::Float(float_res))
+    } else {
+        Ok(Value::Integer(int_res))
     }
+}
+
+fn mul_function(args: Vec<Value>, _env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    let mut is_float = false;
+    let mut int_prod: i64 = 1;
+    let mut float_prod: f64 = 1.0;
+
+    for arg in args {
+        match to_num(&arg)? {
+            Num::Int(i) => {
+                if is_float {
+                    float_prod *= i as f64;
+                } else {
+                    int_prod *= i;
+                }
+            }
+            Num::Float(f) => {
+                if !is_float {
+                    is_float = true;
+                    float_prod = int_prod as f64 * f;
+                } else {
+                    float_prod *= f;
+                }
+            }
+        }
+    }
+
+    if is_float {
+        Ok(Value::Float(float_prod))
+    } else {
+        Ok(Value::Integer(int_prod))
+    }
+}
+
+fn div_function(args: Vec<Value>, _env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    if args.is_empty() {
+        return Err(EvalError::ArityMismatch {
+            expected: "at least 1 argument".to_string(),
+            got: 0,
+            span: None,
+        });
+    }
+
+    let first_num = to_num(&args[0])?;
+    let mut is_float = matches!(first_num, Num::Float(_));
+    let mut int_res = match first_num {
+        Num::Int(i) => i,
+        Num::Float(f) => f as i64,
+    };
+    let mut float_res = match first_num {
+        Num::Float(f) => f,
+        Num::Int(i) => i as f64,
+    };
+
+    for arg in &args[1..] {
+        match to_num(arg)? {
+            Num::Int(i) => {
+                if i == 0 {
+                    return Err(EvalError::Custom("Division by zero".to_string(), None));
+                }
+                if is_float {
+                    float_res /= i as f64;
+                } else {
+                    int_res /= i;
+                }
+            }
+            Num::Float(f) => {
+                if f == 0.0 {
+                    return Err(EvalError::Custom("Division by zero".to_string(), None));
+                }
+                if !is_float {
+                    is_float = true;
+                    float_res = int_res as f64 / f;
+                } else {
+                    float_res /= f;
+                }
+            }
+        }
+    }
+
+    if is_float {
+        Ok(Value::Float(float_res))
+    } else {
+        Ok(Value::Integer(int_res))
+    }
+}
+
+fn mod_function(args: Vec<Value>, _env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    let parsed = Args::new(&args);
+    parsed.exactly(2, "mod")?;
+
+    let a = parsed.integer(0, "First argument to mod")?;
+    let b = parsed.integer(1, "Second argument to mod")?;
+
+    if b == 0 {
+        return Err(EvalError::Custom(
+            "Division by zero in mod".to_string(),
+            None,
+        ));
+    }
+
+    Ok(Value::Integer(a % b))
+}
+
+fn concat_function(args: Vec<Value>, _env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    let mut result = String::new();
+
+    for arg in args {
+        match arg {
+            Value::String(value) => result.push_str(&value),
+            val => {
+                return Err(EvalError::TypeMismatch {
+                    expected: "string".to_string(),
+                    got: val.type_name().to_string(),
+                    span: None,
+                })
+            }
+        }
+    }
+
+    Ok(Value::String(result))
+}
+
+fn compare_values<F>(args: Vec<Value>, cmp: F) -> Result<Value, EvalError>
+where
+    F: Fn(&Value, &Value) -> bool,
+{
+    let parsed = Args::new(&args);
+    parsed.at_least(2, "comparison")?;
+
+    for pair in parsed.args.windows(2) {
+        if !cmp(&pair[0], &pair[1]) {
+            return Ok(Value::Bool(false));
+        }
+    }
+
+    Ok(Value::Bool(true))
+}
+
+fn eq_function(args: Vec<Value>, _env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    compare_values(args, |a, b| a == b)
+}
+
+fn neq_function(args: Vec<Value>, _env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    compare_values(args, |a, b| a != b)
+}
+
+fn num_cmp<F>(a: &Value, b: &Value, cmp_f: F) -> bool
+where
+    F: Fn(f64, f64) -> bool,
+{
+    match (to_num(a), to_num(b)) {
+        (Ok(Num::Int(i1)), Ok(Num::Int(i2))) => cmp_f(i1 as f64, i2 as f64),
+        (Ok(Num::Float(f1)), Ok(Num::Float(f2))) => cmp_f(f1, f2),
+        (Ok(Num::Int(i)), Ok(Num::Float(f))) => cmp_f(i as f64, f),
+        (Ok(Num::Float(f)), Ok(Num::Int(i))) => cmp_f(f, i as f64),
+        _ => false,
+    }
+}
+
+fn gt_function(args: Vec<Value>, _env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    compare_values(args, |a, b| num_cmp(a, b, |x, y| x > y))
+}
+
+fn lt_function(args: Vec<Value>, _env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    compare_values(args, |a, b| num_cmp(a, b, |x, y| x < y))
+}
+
+fn gte_function(args: Vec<Value>, _env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    compare_values(args, |a, b| num_cmp(a, b, |x, y| x >= y))
+}
+
+fn lte_function(args: Vec<Value>, _env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    compare_values(args, |a, b| num_cmp(a, b, |x, y| x <= y))
+}
+
+fn not_function(args: Vec<Value>, _env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    let parsed = Args::new(&args);
+    parsed.exactly(1, "not")?;
+    Ok(Value::Bool(!parsed.get(0)?.is_truthy()))
+}
+
+fn zeroq_function(args: Vec<Value>, _env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    let parsed = Args::new(&args);
+    parsed.exactly(1, "zero?")?;
+    match to_num(parsed.get(0)?)? {
+        Num::Int(i) => Ok(Value::Bool(i == 0)),
+        Num::Float(f) => Ok(Value::Bool(f == 0.0)),
+    }
+}
+
+fn and_function(args: Vec<Value>, _env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    let mut last = Value::Bool(true);
+    for arg in args {
+        if !arg.is_truthy() {
+            return Ok(Value::Bool(false));
+        }
+        last = arg;
+    }
+    Ok(last)
+}
+
+fn or_function(args: Vec<Value>, _env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    for arg in args {
+        if arg.is_truthy() {
+            return Ok(arg);
+        }
+    }
+    Ok(Value::Bool(false))
+}
+
+fn first_function(args: Vec<Value>, _env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    let parsed = Args::new(&args);
+    parsed.exactly(1, "first")?;
+    match parsed.get(0)? {
+        Value::List(l) => Ok(l.first().cloned().unwrap_or(Value::Nil)),
+        Value::Vector(v) => Ok(v.first().cloned().unwrap_or(Value::Nil)),
+        val => Err(EvalError::TypeMismatch {
+            expected: "list or vector".to_string(),
+            got: val.type_name().to_string(),
+            span: None,
+        }),
+    }
+}
+
+fn rest_function(args: Vec<Value>, _env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    let parsed = Args::new(&args);
+    parsed.exactly(1, "rest")?;
+    match parsed.get(0)? {
+        Value::List(l) => {
+            if l.is_empty() {
+                Ok(Value::List(vec![]))
+            } else {
+                Ok(Value::List(l[1..].to_vec()))
+            }
+        }
+        Value::Vector(v) => {
+            if v.is_empty() {
+                Ok(Value::Vector(vec![]))
+            } else {
+                Ok(Value::Vector(v[1..].to_vec()))
+            }
+        }
+        val => Err(EvalError::TypeMismatch {
+            expected: "list or vector".to_string(),
+            got: val.type_name().to_string(),
+            span: None,
+        }),
+    }
+}
+
+fn second_function(args: Vec<Value>, _env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    let parsed = Args::new(&args);
+    parsed.exactly(1, "second")?;
+    match parsed.get(0)? {
+        Value::List(l) => Ok(l.get(1).cloned().unwrap_or(Value::Nil)),
+        Value::Vector(v) => Ok(v.get(1).cloned().unwrap_or(Value::Nil)),
+        val => Err(EvalError::TypeMismatch {
+            expected: "list or vector".to_string(),
+            got: val.type_name().to_string(),
+            span: None,
+        }),
+    }
+}
+
+fn third_function(args: Vec<Value>, _env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    let parsed = Args::new(&args);
+    parsed.exactly(1, "third")?;
+    match parsed.get(0)? {
+        Value::List(l) => Ok(l.get(2).cloned().unwrap_or(Value::Nil)),
+        Value::Vector(v) => Ok(v.get(2).cloned().unwrap_or(Value::Nil)),
+        val => Err(EvalError::TypeMismatch {
+            expected: "list or vector".to_string(),
+            got: val.type_name().to_string(),
+            span: None,
+        }),
+    }
+}
+
+fn nth_function(args: Vec<Value>, _env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    let parsed = Args::new(&args);
+    parsed.exactly(2, "nth")?;
+    let idx = parsed.integer(1, "index")?;
+    if idx < 0 {
+        return Err(EvalError::Custom(
+            "Index cannot be negative".to_string(),
+            None,
+        ));
+    }
+    let uidx = idx as usize;
+
+    match parsed.get(0)? {
+        Value::List(l) => Ok(l.get(uidx).cloned().unwrap_or(Value::Nil)),
+        Value::Vector(v) => Ok(v.get(uidx).cloned().unwrap_or(Value::Nil)),
+        val => Err(EvalError::TypeMismatch {
+            expected: "list or vector".to_string(),
+            got: val.type_name().to_string(),
+            span: None,
+        }),
+    }
+}
+
+fn conj_function(args: Vec<Value>, _env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    let parsed = Args::new(&args);
+    parsed.exactly(2, "conj")?;
+
+    match (parsed.get(0)?, parsed.get(1)?) {
+        (Value::Vector(v), elem) => {
+            let mut new_v = v.clone();
+            new_v.push(elem.clone());
+            Ok(Value::Vector(new_v))
+        }
+        (Value::List(l), elem) => {
+            let mut new_l = vec![elem.clone()];
+            new_l.extend(l.clone());
+            Ok(Value::List(new_l))
+        }
+        // Also support (push elem list) for legacy list push behavior if elem comes second
+        (elem, Value::List(l)) => {
+            let mut new_l = vec![elem.clone()];
+            new_l.extend(l.clone());
+            Ok(Value::List(new_l))
+        }
+        (val, _) => Err(EvalError::TypeMismatch {
+            expected: "list or vector".to_string(),
+            got: val.type_name().to_string(),
+            span: None,
+        }),
+    }
+}
+
+fn reverse_function(args: Vec<Value>, _env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    let parsed = Args::new(&args);
+    parsed.exactly(1, "reverse")?;
+    match parsed.get(0)? {
+        Value::List(l) => {
+            let mut rev = l.clone();
+            rev.reverse();
+            Ok(Value::List(rev))
+        }
+        Value::Vector(v) => {
+            let mut rev = v.clone();
+            rev.reverse();
+            Ok(Value::Vector(rev))
+        }
+        val => Err(EvalError::TypeMismatch {
+            expected: "list or vector".to_string(),
+            got: val.type_name().to_string(),
+            span: None,
+        }),
+    }
+}
+
+fn count_function(args: Vec<Value>, _env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    let parsed = Args::new(&args);
+    parsed.exactly(1, "count")?;
+    match parsed.get(0)? {
+        Value::List(l) => Ok(Value::Integer(l.len() as i64)),
+        Value::Vector(v) => Ok(Value::Integer(v.len() as i64)),
+        Value::String(s) => Ok(Value::Integer(s.len() as i64)),
+        val => Err(EvalError::TypeMismatch {
+            expected: "list, vector, or string".to_string(),
+            got: val.type_name().to_string(),
+            span: None,
+        }),
+    }
+}
+
+fn print_function(args: Vec<Value>, env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    let mut outputs = Vec::new();
 
     for arg in &args {
         let output = match arg {
-            Object::Integer(value) => value.to_string(),
-            Object::String(value) => value.clone(),
-            Object::Bool(value) => value.to_string(),
-            Object::DataList(_) => arg.to_string(),
-            Object::Symbol(symbol) => eval_symbol(symbol, env)?.to_string(),
-            _ => return Err("Cannot print this type".to_string()),
+            Value::String(s) => s.clone(),
+            other => format!("{}", other),
         };
-
-        println!("{output}");
-
-        #[cfg(any(test, feature = "test-helpers"))]
-        env.borrow_mut().add_output(output);
+        outputs.push(output);
     }
 
-    Ok(args.last().unwrap().clone())
+    let joined = outputs.join(" ");
+    println!("{}", joined);
+
+    env.borrow_mut().add_output(joined);
+
+    Ok(args.last().cloned().unwrap_or(Value::Void))
+}
+
+fn read_line_function(args: Vec<Value>, _env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    let parsed = Args::new(&args);
+    parsed.exactly(0, "read-line")?;
+
+    let _ = io::stdout().flush();
+
+    let mut buffer = String::new();
+    match io::stdin().read_line(&mut buffer) {
+        Ok(0) => Ok(Value::Nil),
+        Ok(_) => {
+            if buffer.ends_with('\n') {
+                buffer.pop();
+                if buffer.ends_with('\r') {
+                    buffer.pop();
+                }
+            }
+            Ok(Value::String(buffer))
+        }
+        Err(e) => Err(EvalError::Custom(
+            format!("Failed to read line: {}", e),
+            None,
+        )),
+    }
 }

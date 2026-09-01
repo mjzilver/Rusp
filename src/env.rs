@@ -1,61 +1,54 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::parser::Object;
+use crate::value::Value;
 
 #[derive(Debug, PartialEq)]
 pub struct Env {
-    store: HashMap<String, Object>,
+    store: HashMap<String, Value>,
     outer: Option<Rc<RefCell<Env>>>,
-    #[cfg(any(test, feature = "test-helpers"))]
     pub output_buffer: Vec<String>,
 }
 
 impl Env {
     pub fn new() -> Self {
-        let mut env = Env {
+        Env {
             store: HashMap::new(),
             outer: None,
-            #[cfg(any(test, feature = "test-helpers"))]
             output_buffer: Vec::new(),
-        };
-        env.set("T".to_string(), Object::Bool(true));
-        env.set("NIL".to_string(), Object::Bool(false));
-        env
+        }
     }
 
     pub fn new_child(parent: Rc<RefCell<Self>>) -> Env {
         Env {
             store: HashMap::new(),
             outer: Some(parent),
-            #[cfg(any(test, feature = "test-helpers"))]
             output_buffer: Vec::new(),
         }
     }
 
-    pub fn get(&self, key: &str) -> Option<Object> {
+    pub fn get(&self, key: &str) -> Option<Value> {
         match self.store.get(key) {
             Some(var) => Some(var.clone()),
-            None => self.outer.as_ref().and_then(|o| o.borrow_mut().get(key)),
+            None => self.outer.as_ref().and_then(|o| o.borrow().get(key)),
         }
     }
 
-    pub fn set(&mut self, key: String, value: Object) {
+    pub fn set(&mut self, key: String, value: Value) {
         self.store.insert(key, value);
     }
 
-    #[cfg(any(test, feature = "test-helpers"))]
     pub fn add_output(&mut self, output: String) {
-        self.output_buffer.push(output);
+        if let Some(ref outer) = self.outer {
+            outer.borrow_mut().add_output(output);
+        } else {
+            self.output_buffer.push(output);
+        }
     }
 
-    #[allow(dead_code)]
-    #[cfg(any(test, feature = "test-helpers"))]
     pub fn clear_output(&mut self) {
         self.output_buffer.clear();
     }
 
-    #[allow(dead_code)]
-    #[cfg(any(test, feature = "test-helpers"))]
     pub fn get_output(&self) -> String {
         self.output_buffer.join("\n")
     }

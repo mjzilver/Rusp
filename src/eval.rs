@@ -1,128 +1,131 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::builtins::{self, get_builtin_function};
-use crate::special_form::*;
-use crate::{env::Env, parser::Object};
+use crate::builtins::get_builtin_function;
+use crate::env::Env;
+use crate::errors::{EvalError, RuspResult, Span};
+use crate::parser::{Expr, ExprKind};
+use crate::special_form::{ast_to_value, eval_special_form};
+use crate::value::Value;
 
-pub fn eval(object: Object, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    match object {
-        Object::Integer(_) => Ok(object),
-        Object::String(_) => Ok(object),
-        Object::Bool(_) => Ok(object),
-        Object::Symbol(s) => eval_symbol(&s, env),
-        Object::List(ref list) => eval_list(list, env),
-        Object::DataList(ref list) => eval_data_list(list, env),
-        Object::Void() => Ok(Object::Void()),
-
-        // Functions do not get eval
-        Object::Function { .. } => Err("Unexpected function object in this context".to_string()),
-    }
-}
-
-pub fn eval_stack(object_stack: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<String, String> {
-    let mut output = String::new();
-
-    for object in object_stack {
-        match &eval(object.clone(), env) {
-            Ok(eval_obj) => {
-                if std::env::var("DEBUG_MODE").is_ok() {
-                    output += &eval_obj.to_string();
-                }
+pub fn eval(expr: Expr, env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    let span = expr.span;
+    match expr.kind {
+        ExprKind::Integer(i) => Ok(Value::Integer(i)),
+        ExprKind::Float(f) => Ok(Value::Float(f)),
+        ExprKind::String(s) => Ok(Value::String(s)),
+        ExprKind::Bool(b) => Ok(Value::Bool(b)),
+        ExprKind::Nil => Ok(Value::Nil),
+        ExprKind::Quote(q) => Ok(ast_to_value(&q)),
+        ExprKind::Symbol(s) => eval_symbol(&s, span, env),
+        ExprKind::Vector(elements) => {
+            let mut evaluated = Vec::new();
+            for item in elements {
+                evaluated.push(eval(item, env)?);
             }
-            Err(err) => output += err,
+            Ok(Value::Vector(evaluated))
+        }
+        ExprKind::List(elements) => eval_list(&elements, span, env),
+    }
+}
+
+pub fn eval_stack(ast: Vec<Expr>, env: &mut Rc<RefCell<Env>>) -> RuspResult<String> {
+    let mut outputs = Vec::new();
+
+    for expr in ast {
+        let val = eval(expr, env)?;
+        if std::env::var("DEBUG_MODE").is_ok() && val != Value::Void {
+            outputs.push(format!("{}", val));
         }
     }
 
-    return Ok(output);
+    Ok(outputs.join("\n"))
 }
 
-pub fn eval_symbol(s: &String, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    if let Some(_) = get_builtin_function(s) {
-        return Ok(Object::Symbol(s.clone()));
+pub fn eval_symbol(s: &str, span: Span, env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    if let Some(val) = env.borrow().get(s) {
+        return Ok(val);
+    }
+    if let Some(primitive) = get_builtin_function(s) {
+        return Ok(Value::PrimitiveFunc {
+            name: s.to_string(),
+            func: primitive,
+        });
     }
 
-    env.borrow_mut()
-        .get(s)
-        .ok_or_else(|| format!("Undefined symbol: {}", s))
+    Err(EvalError::UnboundSymbol(s.to_string(), Some(span)))
 }
 
-fn eval_list(list: &Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    if list.is_empty() {
-        return Err("Empty list".to_string());
+fn eval_list(
+    elements: &[Expr],
+    span: Span,
+    env: &mut Rc<RefCell<Env>>,
+) -> Result<Value, EvalError> {
+    if elements.is_empty() {
+        return Ok(Value::List(vec![]));
     }
 
-    let func = eval(list[0].clone(), env)?;
-    let args = &list[1..];
-
-    // Check for special forms
-    if let Object::Symbol(ref s) = func {
-        match s.as_str() {
-            "let" => return let_function(args.to_vec(), env),
-            "defun" => return defun_function(args.to_vec(), env),
-            "dotimes" => return dotimes_function(args.to_vec(), env),
-            "cond" => return cond_function(args.to_vec(), env),
-            "setq" => return setq_function(args.to_vec(), env),
-            "if" => return if_function(args.to_vec(), env),
-            "push" => return builtins::push_function(args.to_vec(), env),
-            _ => {}
+    if let ExprKind::Symbol(ref sym) = elements[0].kind {
+        if let Some(res) = eval_special_form(sym, &elements[1..], span, env)? {
+            return Ok(res);
         }
     }
 
-    apply_function(func, args.to_vec(), env)
-}
-
-fn eval_data_list(list: &Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    let mut eval_objects = Vec::new();
-
-    for obj in list {
-        eval_objects.push(eval(obj.clone(), env)?);
-    }
-
-    Ok(Object::DataList(eval_objects))
+    let func = eval(elements[0].clone(), env)?;
+    apply_function(func, &elements[1..], span, env)
 }
 
 fn apply_function(
-    func: Object,
-    args: Vec<Object>,
-    env: &mut Rc<RefCell<Env>>,
-) -> Result<Object, String> {
-    let evaluated_args: Result<Vec<Object>, String> =
-        args.into_iter().map(|arg| eval(arg, env)).collect();
-    let evaluated_args = evaluated_args?;
-
+    func: Value,
+    arg_exprs: &[Expr],
+    span: Span,
+    caller_env: &mut Rc<RefCell<Env>>,
+) -> Result<Value, EvalError> {
     match func {
-        Object::Symbol(ref s) => {
-            if let Some(built_in) = get_builtin_function(s.as_str()) {
-                built_in(evaluated_args, env)
-            } else {
-                match eval_symbol(s, env) {
-                    Ok(f) => return apply_function(f, evaluated_args, env),
-                    Err(_) => Err(format!("Unknown function: {}", s)),
-                }
+        Value::PrimitiveFunc {
+            func: primitive, ..
+        } => {
+            let mut eval_args = Vec::new();
+            for arg_expr in arg_exprs {
+                eval_args.push(eval(arg_expr.clone(), caller_env)?);
             }
+            primitive(eval_args, caller_env)
         }
-        Object::Function { name, params, body } => {
-            if params.len() != evaluated_args.len() {
-                return Err(format!(
-                    "Incorrect number of arguments for function: {}",
-                    name
-                ));
+        Value::Closure {
+            name: _,
+            params,
+            body,
+            env: closure_env,
+        } => {
+            let mut eval_args = Vec::new();
+            for arg_expr in arg_exprs {
+                eval_args.push(eval(arg_expr.clone(), caller_env)?);
             }
 
-            let mut local_env = env.clone();
-            for (param, arg) in params.into_iter().zip(evaluated_args) {
-                local_env.borrow_mut().set(param.to_string(), arg);
+            if params.len() != eval_args.len() {
+                return Err(EvalError::ArityMismatch {
+                    expected: format!("{}", params.len()),
+                    got: eval_args.len(),
+                    span: Some(span),
+                });
             }
 
-            let mut last_result = Object::Void();
-            for obj in body {
-                last_result = eval(obj, &mut local_env)?;
+            let mut local_env = Rc::new(RefCell::new(Env::new_child(closure_env.clone())));
+            for (param, arg) in params.into_iter().zip(eval_args) {
+                local_env.borrow_mut().set(param, arg);
             }
 
+            let mut last_result = Value::Nil;
+            for stmt in body {
+                last_result = eval(stmt, &mut local_env)?;
+            }
             Ok(last_result)
         }
-        _ => Err("Function application on non-function".to_string()),
+        other => Err(EvalError::TypeMismatch {
+            expected: "function".to_string(),
+            got: other.type_name().to_string(),
+            span: Some(span),
+        }),
     }
 }
 
@@ -130,20 +133,29 @@ fn apply_function(
 mod tests {
     use super::*;
     use crate::env::Env;
-    use crate::parser::Object;
 
     #[test]
     fn test_eval_addition() {
         let mut env = Rc::new(RefCell::new(Env::new()));
-        let input = Object::List(vec![
-            Object::Symbol("+".to_string()),
-            Object::Integer(1),
-            Object::Integer(2),
-        ]);
+        let expr = Expr {
+            kind: ExprKind::List(vec![
+                Expr {
+                    kind: ExprKind::Symbol("+".to_string()),
+                    span: Span::new(1, 1),
+                },
+                Expr {
+                    kind: ExprKind::Integer(1),
+                    span: Span::new(1, 3),
+                },
+                Expr {
+                    kind: ExprKind::Integer(2),
+                    span: Span::new(1, 5),
+                },
+            ]),
+            span: Span::new(1, 1),
+        };
 
-        let result = eval(input, &mut env);
-
-        let expected = Ok(Object::Integer(3));
-        assert_eq!(result, expected);
+        let result = eval(expr, &mut env);
+        assert_eq!(result, Ok(Value::Integer(3)));
     }
 }

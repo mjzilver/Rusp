@@ -1,7 +1,0 @@
-(setq my-list '(1 2 3 4 5))
-(print (first my-list)) 
-(print (nth 2 my-list))
-(push 0 my-list)  
-(print my-list)
-(setq rev-list (reverse my-list))
-(print rev-list)

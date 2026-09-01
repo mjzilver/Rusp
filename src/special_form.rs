@@ -1,159 +1,251 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::{args::Args, env::Env, eval::eval, parser::Object};
+use crate::{
+    env::Env,
+    errors::{EvalError, Span},
+    eval::eval,
+    parser::{Expr, ExprKind},
+    value::Value,
+};
 
-pub fn if_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    let args = Args::new(&args);
-
-    if args.args.len() < 2 || args.args.len() > 3 {
-        return Err("Incorrect number of arguments for if".to_string());
-    }
-
-    let condition = eval(args.get(0)?.clone(), env)?;
-
-    if is_truthy(&condition) {
-        return eval(args.get(1)?.clone(), env);
-    }
-
-    match args.args.get(2) {
-        Some(else_branch) => eval(else_branch.clone(), env),
-        None => Ok(Object::Void()),
+pub fn eval_special_form(
+    name: &str,
+    args: &[Expr],
+    span: Span,
+    env: &mut Rc<RefCell<Env>>,
+) -> Result<Option<Value>, EvalError> {
+    match name {
+        "def" => Ok(Some(def_form(args, span, env)?)),
+        "defn" => Ok(Some(defn_form(args, span, env)?)),
+        "fn" => Ok(Some(fn_form(args, span, env)?)),
+        "let" => Ok(Some(let_form(args, span, env)?)),
+        "if" => Ok(Some(if_form(args, span, env)?)),
+        "do" => Ok(Some(do_form(args, env)?)),
+        "quote" => Ok(Some(quote_form(args, span)?)),
+        _ => Ok(None),
     }
 }
 
-fn is_truthy(object: &Object) -> bool {
-    !matches!(object, Object::Bool(false) | Object::Void())
-}
-
-pub fn dotimes_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    let args = Args::new(&args);
-    args.exactly(2, "dotimes")?;
-
-    let loop_args = args.list(0, "dotimes first argument should be a list")?;
-
-    if loop_args.len() != 2 {
-        return Err("dotimes loop variable and limit expected".to_string());
+fn def_form(args: &[Expr], span: Span, env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    if args.len() != 2 {
+        return Err(EvalError::ArityMismatch {
+            expected: "2 (symbol and value)".to_string(),
+            got: args.len(),
+            span: Some(span),
+        });
     }
 
-    let loop_var = match &loop_args[0] {
-        Object::Symbol(symbol) => symbol,
-        _ => return Err("First item in dotimes must be a symbol".to_string()),
+    let sym_name = match &args[0].kind {
+        ExprKind::Symbol(s) => s.clone(),
+        _ => {
+            return Err(EvalError::TypeMismatch {
+                expected: "symbol".to_string(),
+                got: "non-symbol".to_string(),
+                span: Some(args[0].span),
+            })
+        }
     };
 
-    let limit = match eval(loop_args[1].clone(), env)? {
-        Object::Integer(value) => value,
-        _ => return Err("Limit in dotimes must evaluate to an integer".to_string()),
+    let val = eval(args[1].clone(), env)?;
+    env.borrow_mut().set(sym_name, val.clone());
+    Ok(val)
+}
+
+fn fn_form(args: &[Expr], span: Span, env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    if args.is_empty() {
+        return Err(EvalError::ArityMismatch {
+            expected: "at least 1 argument (parameter vector/list)".to_string(),
+            got: 0,
+            span: Some(span),
+        });
+    }
+
+    let (name, params_expr, body_exprs) = if let ExprKind::Symbol(n) = &args[0].kind {
+        if args.len() < 2 {
+            return Err(EvalError::ArityMismatch {
+                expected: "at least 2 arguments for named fn".to_string(),
+                got: args.len(),
+                span: Some(span),
+            });
+        }
+        (Some(n.clone()), &args[1], &args[2..])
+    } else {
+        (None, &args[0], &args[1..])
     };
 
-    let body = args.get(1)?.clone();
+    let params = extract_param_names(params_expr)?;
 
-    for i in 0..limit {
-        let mut local_env = env.clone();
-
-        local_env
-            .borrow_mut()
-            .set(loop_var.clone(), Object::Integer(i));
-
-        eval(body.clone(), &mut local_env)?;
-    }
-
-    Ok(Object::Void())
+    Ok(Value::Closure {
+        name,
+        params,
+        body: body_exprs.to_vec(),
+        env: env.clone(),
+    })
 }
 
-pub fn cond_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    for clause in args {
-        let clause = match clause {
-            Object::List(clause) => clause,
-            _ => return Err("Invalid cond clause".to_string()),
-        };
+fn defn_form(args: &[Expr], span: Span, env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    if args.len() < 2 {
+        return Err(EvalError::ArityMismatch {
+            expected: "at least 2 (name and params)".to_string(),
+            got: args.len(),
+            span: Some(span),
+        });
+    }
 
-        match clause.as_slice() {
-            [condition, body] => {
-                let condition = eval(condition.clone(), env)?;
+    let fn_name = match &args[0].kind {
+        ExprKind::Symbol(s) => s.clone(),
+        _ => {
+            return Err(EvalError::TypeMismatch {
+                expected: "symbol".to_string(),
+                got: "non-symbol".to_string(),
+                span: Some(args[0].span),
+            })
+        }
+    };
 
-                if is_truthy(&condition) {
-                    return eval(body.clone(), env);
-                }
+    let params = extract_param_names(&args[1])?;
+    let body = args[2..].to_vec();
+
+    let closure = Value::Closure {
+        name: Some(fn_name.clone()),
+        params,
+        body,
+        env: env.clone(),
+    };
+
+    env.borrow_mut().set(fn_name, closure.clone());
+    Ok(closure)
+}
+
+fn extract_param_names(expr: &Expr) -> Result<Vec<String>, EvalError> {
+    let param_exprs = match &expr.kind {
+        ExprKind::Vector(v) | ExprKind::List(v) => v,
+        _ => {
+            return Err(EvalError::TypeMismatch {
+                expected: "vector or list of parameters".to_string(),
+                got: "non-collection".to_string(),
+                span: Some(expr.span),
+            })
+        }
+    };
+
+    let mut names = Vec::new();
+    for p in param_exprs {
+        match &p.kind {
+            ExprKind::Symbol(s) => names.push(s.clone()),
+            _ => {
+                return Err(EvalError::TypeMismatch {
+                    expected: "parameter symbol".to_string(),
+                    got: "non-symbol".to_string(),
+                    span: Some(p.span),
+                })
             }
-
-            [body] => {
-                // A single-element clause is the default clause.
-                return eval(body.clone(), env);
-            }
-
-            _ => return Err("Invalid cond clause".to_string()),
         }
     }
-
-    Ok(Object::Bool(false))
+    Ok(names)
 }
 
-pub fn defun_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    let args = Args::new(&args);
-    args.at_least(3, "defun")?;
-
-    let name = args.symbol(0, "First argument to defun must be a symbol")?;
-
-    let params = args
-        .list(1, "Second argument to defun must be a list of parameters")?
-        .clone();
-
-    let body = args.args[2..].to_vec();
-
-    env.borrow_mut().set(
-        name.to_string(),
-        Object::Function {
-            name: name.to_string(),
-            params,
-            body,
-        },
-    );
-
-    Ok(Object::Void())
-}
-
-pub fn let_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    let args = Args::new(&args);
-    args.exactly(2, "let")?;
-
-    let bindings = args.list(0, "First argument to let must be a list of bindings")?;
-
-    let body = args.get(1)?.clone();
-
-    let mut local_env = env.clone();
-
-    for binding in bindings {
-        let pair = match binding {
-            Object::List(pair) => pair,
-            _ => return Err("Each binding must be a list".to_string()),
-        };
-
-        if pair.len() != 2 {
-            return Err("Each binding must be a list of two elements".to_string());
-        }
-
-        let var_name = match &pair[0] {
-            Object::Symbol(name) => name,
-            _ => return Err("Binding variable must be a symbol".to_string()),
-        };
-
-        let value = eval(pair[1].clone(), &mut local_env)?;
-
-        local_env.borrow_mut().set(var_name.clone(), value);
+fn let_form(args: &[Expr], span: Span, env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    if args.is_empty() {
+        return Err(EvalError::ArityMismatch {
+            expected: "at least 1 (bindings vector/list)".to_string(),
+            got: 0,
+            span: Some(span),
+        });
     }
 
-    eval(body, &mut local_env)
+    let binding_exprs = match &args[0].kind {
+        ExprKind::Vector(v) | ExprKind::List(v) => v,
+        _ => {
+            return Err(EvalError::TypeMismatch {
+                expected: "bindings vector or list".to_string(),
+                got: "non-collection".to_string(),
+                span: Some(args[0].span),
+            })
+        }
+    };
+
+    if binding_exprs.len() % 2 != 0 {
+        return Err(EvalError::Custom(
+            "let bindings must contain an even number of forms".to_string(),
+            Some(args[0].span),
+        ));
+    }
+
+    let mut local_env = Rc::new(RefCell::new(Env::new_child(env.clone())));
+
+    for pair in binding_exprs.chunks(2) {
+        let sym = match &pair[0].kind {
+            ExprKind::Symbol(s) => s.clone(),
+            _ => {
+                return Err(EvalError::TypeMismatch {
+                    expected: "binding symbol".to_string(),
+                    got: "non-symbol".to_string(),
+                    span: Some(pair[0].span),
+                })
+            }
+        };
+        let val = eval(pair[1].clone(), &mut local_env)?;
+        local_env.borrow_mut().set(sym, val);
+    }
+
+    let mut result = Value::Nil;
+    for body_expr in &args[1..] {
+        result = eval(body_expr.clone(), &mut local_env)?;
+    }
+    Ok(result)
 }
 
-pub fn setq_function(args: Vec<Object>, env: &mut Rc<RefCell<Env>>) -> Result<Object, String> {
-    let args = Args::new(&args);
-    args.exactly(2, "setq")?;
+fn if_form(args: &[Expr], span: Span, env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    if args.len() < 2 || args.len() > 3 {
+        return Err(EvalError::ArityMismatch {
+            expected: "2 or 3 (condition, then, optional else)".to_string(),
+            got: args.len(),
+            span: Some(span),
+        });
+    }
 
-    let name = args.symbol(0, "First argument to setq must be a symbol")?;
+    let cond_val = eval(args[0].clone(), env)?;
+    if cond_val.is_truthy() {
+        eval(args[1].clone(), env)
+    } else if args.len() == 3 {
+        eval(args[2].clone(), env)
+    } else {
+        Ok(Value::Nil)
+    }
+}
 
-    let value = eval(args.get(1)?.clone(), env)?;
+fn do_form(args: &[Expr], env: &mut Rc<RefCell<Env>>) -> Result<Value, EvalError> {
+    let mut last = Value::Nil;
+    for expr in args {
+        last = eval(expr.clone(), env)?;
+    }
+    Ok(last)
+}
 
-    env.borrow_mut().set(name.to_string(), value.clone());
+fn quote_form(args: &[Expr], span: Span) -> Result<Value, EvalError> {
+    if args.len() != 1 {
+        return Err(EvalError::ArityMismatch {
+            expected: "1".to_string(),
+            got: args.len(),
+            span: Some(span),
+        });
+    }
+    Ok(ast_to_value(&args[0]))
+}
 
-    Ok(value)
+pub fn ast_to_value(expr: &Expr) -> Value {
+    match &expr.kind {
+        ExprKind::Integer(i) => Value::Integer(*i),
+        ExprKind::Float(f) => Value::Float(*f),
+        ExprKind::String(s) => Value::String(s.clone()),
+        ExprKind::Symbol(s) => Value::Symbol(s.clone()),
+        ExprKind::Bool(b) => Value::Bool(*b),
+        ExprKind::Nil => Value::Nil,
+        ExprKind::List(l) => Value::List(l.iter().map(ast_to_value).collect()),
+        ExprKind::Vector(v) => Value::Vector(v.iter().map(ast_to_value).collect()),
+        ExprKind::Quote(q) => {
+            Value::List(vec![Value::Symbol("quote".to_string()), ast_to_value(q)])
+        }
+    }
 }

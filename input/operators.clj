@@ -8,7 +8,7 @@
 (- (/ 10 2) 3)
 
 ; Define a variable and use it with an operator
-(setq x 10)
+(def x 10)
 (+ x 5)
 
 ; Basic if/else conditionals

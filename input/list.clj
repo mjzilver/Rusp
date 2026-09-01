@@ -1,0 +1,7 @@
+(def my-list [1 2 3 4 5])
+(print (first my-list))
+(print (nth my-list 2))
+(def my-list (conj my-list 6))
+(print my-list)
+(def rev-list (reverse my-list))
+(print rev-list)

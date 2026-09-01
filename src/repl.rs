@@ -1,6 +1,7 @@
+use crate::env::Env;
+use crate::eval::eval_stack;
 use crate::lexer::tokenize;
 use crate::parser::parse;
-use crate::{env::Env, eval::eval_stack};
 use std::cell::RefCell;
 use std::fs::File;
 use std::io::{stdin, Read, Write};
@@ -19,7 +20,7 @@ pub fn start() {
 }
 
 fn handle_repl_loop(env: &mut Rc<RefCell<Env>>) {
-    let mut s: String = String::new();
+    let mut s = String::new();
 
     println!("Welcome to the Rusp programming language REPL (use exit to exit)");
 
@@ -28,37 +29,52 @@ fn handle_repl_loop(env: &mut Rc<RefCell<Env>>) {
         std::io::stdout().flush().expect("Failed to flush stdout");
 
         s.clear();
-        stdin().read_line(&mut s).expect("Incorrect input!");
+        if stdin().read_line(&mut s).is_err() {
+            break;
+        }
 
         if s.trim() == "exit" {
             break;
         }
 
-        let response = handle_input(&s.trim(), env);
-        println!("{}", response);
+        let response = handle_input(s.trim(), env);
+        if !response.is_empty() {
+            println!("{}", response);
+        }
     }
 }
 
 fn handle_file(file_path: &str, env: &mut Rc<RefCell<Env>>) {
     let path = Path::new(file_path);
-    let mut file = File::open(&path).expect("Failed to open file");
+    let mut file = match File::open(&path) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("Failed to open file {}: {}", file_path, e);
+            return;
+        }
+    };
 
     let mut content = String::new();
-    file.read_to_string(&mut content)
-        .expect("Failed to read file");
+    if let Err(e) = file.read_to_string(&mut content) {
+        eprintln!("Failed to read file {}: {}", file_path, e);
+        return;
+    }
 
     let response = handle_input(&content, env);
-    println!("{}", response);
+    if !response.is_empty() {
+        println!("{}", response);
+    }
 }
 
 pub fn handle_input(input: &str, env: &mut Rc<RefCell<Env>>) -> String {
-    let tokens = tokenize(input);
-
-    match parse(&tokens) {
-        Ok(stack) => match eval_stack(stack, env) {
-            Ok(result) => result,
-            Err(e) => format!("Evaluation Error: {}", e),
+    match tokenize(input) {
+        Ok(tokens) => match parse(&tokens) {
+            Ok(ast) => match eval_stack(ast, env) {
+                Ok(result) => result,
+                Err(e) => format!("{}", e),
+            },
+            Err(e) => format!("{}", e),
         },
-        Err(e) => format!("Parse Error: {}", e),
+        Err(e) => format!("{}", e),
     }
 }

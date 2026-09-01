@@ -1,12 +1,13 @@
-mod args;
-mod builtins;
-mod eval;
-mod lexer;
-mod parser;
-mod special_form;
-
-// Used by test project
+pub mod args;
+pub mod builtins;
 pub mod env;
-pub use env::Env;
+pub mod errors;
+pub mod eval;
+pub mod lexer;
+pub mod parser;
 pub mod repl;
+pub mod special_form;
+pub mod value;
+
+pub use env::Env;
 pub use repl::handle_input;

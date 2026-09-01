@@ -1,293 +1,257 @@
 use std::fmt;
 
-use crate::lexer::Token;
+use crate::errors::{ParseError, Span};
+use crate::lexer::{Token, TokenKind};
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub enum Object {
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExprKind {
     Integer(i64),
+    Float(f64),
     String(String),
     Symbol(String),
     Bool(bool),
-    List(Vec<Object>),
-    DataList(Vec<Object>),
-    Function {
-        name: String,
-        params: Vec<Object>,
-        body: Vec<Object>,
-    },
-    Void(),
+    Nil,
+    List(Vec<Expr>),
+    Vector(Vec<Expr>),
+    Quote(Box<Expr>),
 }
 
-// Used for debugging and testing
-impl fmt::Display for Object {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Object::Integer(i) => write!(f, "{}", i),
-            Object::Symbol(s) => write!(f, "{}", s),
-            Object::String(s) => write!(f, "\"{}\"", s),
-            Object::Bool(b) => write!(f, "{}", if *b { "T" } else { "NIL" }),
-            Object::List(lst) => {
+#[derive(Debug, Clone, PartialEq)]
+pub struct Expr {
+    pub kind: ExprKind,
+    pub span: Span,
+}
+
+impl fmt::Display for Expr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.kind {
+            ExprKind::Integer(i) => write!(f, "{}", i),
+            ExprKind::Float(fl) => write!(f, "{}", fl),
+            ExprKind::String(s) => write!(f, "\"{}\"", s),
+            ExprKind::Symbol(s) => write!(f, "{}", s),
+            ExprKind::Bool(b) => write!(f, "{}", b),
+            ExprKind::Nil => write!(f, "nil"),
+            ExprKind::List(lst) => {
                 write!(f, "(")?;
                 let mut first = true;
-                for obj in lst {
+                for item in lst {
                     if !first {
                         write!(f, " ")?;
                     }
                     first = false;
-                    write!(f, "{}", obj)?;
+                    write!(f, "{}", item)?;
                 }
                 write!(f, ")")
             }
-            Object::Function { name, params, body } => {
-                write!(f, "Function: {}\n", name)?;
-                write!(f, "Parameters: [")?;
+            ExprKind::Vector(vec) => {
+                write!(f, "[")?;
                 let mut first = true;
-                for param in params {
-                    if !first {
-                        write!(f, ", ")?;
-                    }
-                    first = false;
-                    write!(f, "{}", param)?;
-                }
-                write!(f, "]\n")?;
-                write!(f, "Body: (")?;
-                let mut first = true;
-                for expr in body {
+                for item in vec {
                     if !first {
                         write!(f, " ")?;
                     }
                     first = false;
-                    write!(f, "{}", expr)?;
+                    write!(f, "{}", item)?;
                 }
-                write!(f, ")")
+                write!(f, "]")
             }
-            Object::DataList(data) => {
-                write!(f, "(")?;
-                let mut first = true;
-                for obj in data {
-                    if !first {
-                        write!(f, " ")?;
-                    }
-                    first = false;
-                    write!(f, "{}", obj)?;
-                }
-                write!(f, ")")
-            }
-            Object::Void() => Ok(()),
+            ExprKind::Quote(expr) => write!(f, "'{}", expr),
         }
     }
 }
 
-pub fn parse(tokens: &[Token]) -> Result<Vec<Object>, String> {
+pub fn parse(tokens: &[Token]) -> Result<Vec<Expr>, ParseError> {
     let mut tokens = tokens.to_vec();
     tokens.reverse();
-    let mut object_stack = Vec::new();
+    let mut ast = Vec::new();
 
     while !tokens.is_empty() {
-        let obj = parse_object(&mut tokens)?;
-        object_stack.push(obj);
+        let expr = parse_expr(&mut tokens)?;
+        ast.push(expr);
     }
 
-    Ok(object_stack)
+    Ok(ast)
 }
 
-fn parse_object(tokens: &mut Vec<Token>) -> Result<Object, String> {
-    if let Some(token) = tokens.pop() {
-        match token {
-            Token::Apostrophe => parse_data_list(tokens),
-            Token::LParen => parse_list(tokens),
-            Token::RParen => Err("Unexpected closing parenthesis".to_string()),
-            Token::Integer(n) => Ok(Object::Integer(n)),
-            Token::Symbol(s) => Ok(Object::Symbol(s)),
-            Token::String(s) => Ok(Object::String(s)),
+fn parse_expr(tokens: &mut Vec<Token>) -> Result<Expr, ParseError> {
+    let token = tokens.pop().ok_or(ParseError::UnexpectedEof)?;
+    let span = token.span;
+
+    match token.kind {
+        TokenKind::Apostrophe => {
+            let quoted = parse_expr(tokens)?;
+            let q_span = quoted.span;
+            Ok(Expr {
+                kind: ExprKind::Quote(Box::new(quoted)),
+                span: q_span,
+            })
         }
-    } else {
-        Err("Unexpected end of input".to_owned())
+        TokenKind::LParen => parse_list(tokens, span),
+        TokenKind::RParen => Err(ParseError::UnmatchedParen(span)),
+        TokenKind::LBracket => parse_vector(tokens, span),
+        TokenKind::RBracket => Err(ParseError::UnmatchedBracket(span)),
+        TokenKind::Integer(n) => Ok(Expr {
+            kind: ExprKind::Integer(n),
+            span,
+        }),
+        TokenKind::Float(fl) => Ok(Expr {
+            kind: ExprKind::Float(fl),
+            span,
+        }),
+        TokenKind::String(s) => Ok(Expr {
+            kind: ExprKind::String(s),
+            span,
+        }),
+        TokenKind::Symbol(s) => Ok(Expr {
+            kind: ExprKind::Symbol(s),
+            span,
+        }),
+        TokenKind::Bool(b) => Ok(Expr {
+            kind: ExprKind::Bool(b),
+            span,
+        }),
+        TokenKind::Nil => Ok(Expr {
+            kind: ExprKind::Nil,
+            span,
+        }),
     }
 }
 
-fn parse_data_list(tokens: &mut Vec<Token>) -> Result<Object, String> {
-    let mut data_list = Vec::new();
+fn parse_list(tokens: &mut Vec<Token>, start_span: Span) -> Result<Expr, ParseError> {
+    let mut elements = Vec::new();
 
-    while let Some(token) = tokens.pop() {
-        match token {
-            Token::LParen => (),
-            Token::RParen => return Ok(Object::DataList(data_list)),
-            Token::Integer(n) => data_list.push(Object::Integer(n)),
-            Token::Symbol(s) => data_list.push(Object::Symbol(s)),
-            Token::String(s) => data_list.push(Object::String(s)),
-            _ => return Err(format!("Cannot put this in a data list: {:?}", token)),
+    while let Some(peeked) = tokens.last() {
+        if peeked.kind == TokenKind::RParen {
+            tokens.pop();
+            return Ok(Expr {
+                kind: ExprKind::List(elements),
+                span: start_span,
+            });
         }
+        elements.push(parse_expr(tokens)?);
     }
 
-    Ok(Object::DataList(data_list))
+    Err(ParseError::UnmatchedParen(start_span))
 }
 
-fn parse_list(tokens: &mut Vec<Token>) -> Result<Object, String> {
-    let mut stack = Vec::new();
+fn parse_vector(tokens: &mut Vec<Token>, start_span: Span) -> Result<Expr, ParseError> {
+    let mut elements = Vec::new();
 
-    while let Some(token) = tokens.pop() {
-        match token {
-            Token::Apostrophe => {
-                let sub_list = parse_data_list(tokens)?;
-                stack.push(sub_list);
-            }
-            Token::LParen => {
-                let sub_list = parse_list(tokens)?;
-                stack.push(sub_list);
-            }
-            Token::RParen => {
-                return Ok(Object::List(stack));
-            }
-            Token::Integer(n) => stack.push(Object::Integer(n)),
-            Token::Symbol(s) => stack.push(Object::Symbol(s)),
-            Token::String(s) => stack.push(Object::String(s)),
+    while let Some(peeked) = tokens.last() {
+        if peeked.kind == TokenKind::RBracket {
+            tokens.pop();
+            return Ok(Expr {
+                kind: ExprKind::Vector(elements),
+                span: start_span,
+            });
         }
+        elements.push(parse_expr(tokens)?);
     }
 
-    Err("Parsing error: unmatched parentheses".to_owned())
+    Err(ParseError::UnmatchedBracket(start_span))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lexer::Token;
+    use crate::lexer::{Token, TokenKind};
+
+    fn make_tok(kind: TokenKind) -> Token {
+        Token {
+            kind,
+            span: Span::new(1, 1),
+        }
+    }
 
     #[test]
     fn test_parse_simple_list() {
         let tokens = vec![
-            Token::LParen,
-            Token::Integer(42),
-            Token::Symbol("x".to_string()),
-            Token::String("hello".to_string()),
-            Token::RParen,
+            make_tok(TokenKind::LParen),
+            make_tok(TokenKind::Integer(42)),
+            make_tok(TokenKind::Symbol("x".to_string())),
+            make_tok(TokenKind::String("hello".to_string())),
+            make_tok(TokenKind::RParen),
         ];
 
         let parsed = parse(&tokens);
-
         assert!(parsed.is_ok());
 
-        let objects = parsed.unwrap();
+        let exprs = parsed.unwrap();
+        assert_eq!(exprs.len(), 1);
 
-        assert_eq!(objects.len(), 1);
-
-        match &objects[0] {
-            Object::List(list) => {
+        match &exprs[0].kind {
+            ExprKind::List(list) => {
                 assert_eq!(list.len(), 3);
-                assert_eq!(list[0], Object::Integer(42));
-                assert_eq!(list[1], Object::Symbol("x".to_string()));
-                assert_eq!(list[2], Object::String("hello".to_string()));
+                assert_eq!(list[0].kind, ExprKind::Integer(42));
+                assert_eq!(list[1].kind, ExprKind::Symbol("x".to_string()));
+                assert_eq!(list[2].kind, ExprKind::String("hello".to_string()));
             }
-            _ => panic!("Expected a list of objects"),
+            _ => panic!("Expected a list of exprs"),
         }
     }
 
     #[test]
     fn test_parse_nested_list() {
         let tokens = vec![
-            Token::LParen,
-            Token::Integer(1),
-            Token::LParen,
-            Token::Integer(2),
-            Token::Symbol("y".to_string()),
-            Token::RParen,
-            Token::RParen,
+            make_tok(TokenKind::LParen),
+            make_tok(TokenKind::Integer(1)),
+            make_tok(TokenKind::LParen),
+            make_tok(TokenKind::Integer(2)),
+            make_tok(TokenKind::Symbol("y".to_string())),
+            make_tok(TokenKind::RParen),
+            make_tok(TokenKind::RParen),
         ];
 
         let parsed = parse(&tokens);
-
         assert!(parsed.is_ok());
 
-        let objects = parsed.unwrap();
+        let exprs = parsed.unwrap();
+        assert_eq!(exprs.len(), 1);
 
-        assert_eq!(objects.len(), 1);
-
-        match &objects[0] {
-            Object::List(list) => {
+        match &exprs[0].kind {
+            ExprKind::List(list) => {
                 assert_eq!(list.len(), 2);
-                assert_eq!(list[0], Object::Integer(1));
+                assert_eq!(list[0].kind, ExprKind::Integer(1));
 
-                match &list[1] {
-                    Object::List(sub_list) => {
+                match &list[1].kind {
+                    ExprKind::List(sub_list) => {
                         assert_eq!(sub_list.len(), 2);
-                        assert_eq!(sub_list[0], Object::Integer(2));
-                        assert_eq!(sub_list[1], Object::Symbol("y".to_string()));
+                        assert_eq!(sub_list[0].kind, ExprKind::Integer(2));
+                        assert_eq!(sub_list[1].kind, ExprKind::Symbol("y".to_string()));
                     }
                     _ => panic!("Expected a nested list"),
                 }
             }
-            _ => panic!("Expected a list of objects"),
+            _ => panic!("Expected a list of exprs"),
         }
     }
 
     #[test]
-    fn test_parse_data_list() {
+    fn test_parse_quote() {
         let tokens = vec![
-            Token::Apostrophe,
-            Token::LParen,
-            Token::Symbol("a".to_string()),
-            Token::Integer(3),
-            Token::RParen,
+            make_tok(TokenKind::Apostrophe),
+            make_tok(TokenKind::LParen),
+            make_tok(TokenKind::Symbol("a".to_string())),
+            make_tok(TokenKind::Integer(3)),
+            make_tok(TokenKind::RParen),
         ];
 
         let parsed = parse(&tokens);
-
         assert!(parsed.is_ok());
 
-        let objects = parsed.unwrap();
+        let exprs = parsed.unwrap();
+        assert_eq!(exprs.len(), 1);
 
-        assert_eq!(objects.len(), 1);
-
-        match &objects[0] {
-            Object::DataList(data) => {
-                assert_eq!(data.len(), 2);
-                assert_eq!(data[0], Object::Symbol("a".to_string()));
-                assert_eq!(data[1], Object::Integer(3));
-            }
-            _ => panic!("Expected a data list"),
-        }
-    }
-
-    #[test]
-    fn test_parse_setq_with_datalist() {
-        let tokens = vec![
-            Token::LParen,
-            Token::Symbol("setq".to_string()),
-            Token::Symbol("a".to_string()),
-            Token::Apostrophe,
-            Token::LParen,
-            Token::Integer(1),
-            Token::Integer(1),
-            Token::Integer(1),
-            Token::RParen,
-            Token::RParen,
-        ];
-
-        let parsed = parse(&tokens);
-
-        assert!(parsed.is_ok());
-
-        let objects = parsed.unwrap();
-
-        assert_eq!(objects.len(), 1);
-
-        match &objects[0] {
-            Object::List(list) => {
-                assert_eq!(list.len(), 3);
-                assert_eq!(list[0], Object::Symbol("setq".to_string()));
-                assert_eq!(list[1], Object::Symbol("a".to_string()));
-
-                match &list[2] {
-                    Object::DataList(data_list) => {
-                        assert_eq!(data_list.len(), 3);
-                        assert_eq!(data_list[0], Object::Integer(1));
-                        assert_eq!(data_list[1], Object::Integer(1));
-                        assert_eq!(data_list[2], Object::Integer(1));
-                    }
-                    _ => panic!("Expected a DataList with (1 1 1)"),
+        match &exprs[0].kind {
+            ExprKind::Quote(q) => match &q.kind {
+                ExprKind::List(data) => {
+                    assert_eq!(data.len(), 2);
+                    assert_eq!(data[0].kind, ExprKind::Symbol("a".to_string()));
+                    assert_eq!(data[1].kind, ExprKind::Integer(3));
                 }
-            }
-            _ => panic!("Expected a list with setq, a, and a DataList"),
+                _ => panic!("Expected list inside quote"),
+            },
+            _ => panic!("Expected quote expression"),
         }
     }
 }
